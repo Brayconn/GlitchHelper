@@ -43,19 +43,10 @@ namespace PluginBase
         /// Displays the loaded file's contents onto a given DataGridView
         /// </summary>
         /// <param name="dgv">The DataGridView to display to.</param>
-        //void PopulateRows(DataGridViewColumnCollection columns, DataGridViewRowCollection rows);
-        void PopulateRows(DataGridViewRowCollection rows);
         DataGridViewRow[] GetRows();
 
         void UpdateRows(DataGridViewRow row);
         void UpdateRows(DataGridViewRow[] rows);
-
-        //Add/remove any custom menustrip items
-        //ToolStripItem[] getCustomContextMenuStripItems(DataGridViewCell[] cells);
-        //ToolStripItem[] getCustomContextMenuStripItems();
-        //ToolStripItemCollection removeCustomContextMenuStripItems(ToolStripItemCollection ic);
-
-        //byte[] ExportSelected(DataGridViewCellCollection selectedCells);
 
         /// <summary>
         /// Exports the entire file.
@@ -70,7 +61,6 @@ namespace PluginBase
         /// </summary>
         /// <param name="cells">The cells to get the data of</param>
         /// <returns>The data of the given cells</returns>
-        //List<byte[]> ExportAsList(DataGridViewCell[] cells = null);
         List<byte[]> ExportSelectedAsList(DataGridViewCell[] cells = null);
 
         /// <summary>
@@ -78,7 +68,6 @@ namespace PluginBase
         /// </summary>
         /// <param name="cells">The cells to get the data of</param>
         /// <returns>The data of the given cells</returns>
-        //byte[] ExportAsArray(DataGridViewCell[] cells = null);
         byte[] ExportSelectedAsArray(DataGridViewCell[] cells = null);
 
         /// <summary>
@@ -86,7 +75,6 @@ namespace PluginBase
         /// </summary>
         /// <param name="selectedCells">The cells whose data will be replaced</param>
         /// <param name="replacementBytes">The data to be used as a replacement</param>
-        //void ReplaceSelected(DataGridViewCell[] selectedCells, byte[] replacementBytes);
         void ReplaceSelectedWith(byte[] replacementBytes, DataGridViewCell[] cells = null);
 
         /// <summary>

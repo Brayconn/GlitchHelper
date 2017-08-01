@@ -340,10 +340,9 @@ namespace NetworkGraphics
         /// <returns>Filter for use with saving the final file</returns>
         public string Load(byte[] selectedBytes)
         {
-            //var selectedBytes = File.ReadAllBytes(path);
             string returnFilter = "";
 
-            //header check
+            //Try and find out what kind of Network Graphic we're opening
             if(Enumerable.SequenceEqual(selectedBytes.Take(8), pngHeader))
                 returnFilter = "Portable Network Graphics (*.png)|*.png";
             else if (Enumerable.SequenceEqual(selectedBytes.Take(8), mngHeader))
@@ -508,6 +507,7 @@ namespace NetworkGraphics
             return rows.ToArray();
         }
 
+        /*
         public void PopulateRows(DataGridViewRowCollection rows)
         {
             for (int i = 0; i < openedFile.data.Count; i++)
@@ -519,7 +519,8 @@ namespace NetworkGraphics
                              );
             }
         }
-        
+        */
+
         /* OLD
         public void UpdateRows(DataGridViewRow row)
         {
@@ -713,36 +714,15 @@ namespace NetworkGraphics
 
         public byte[] ExportAll()
         {
-            /*
-            SaveFileDialog sfd = new SaveFileDialog();
-            switch(openedFile.fileType)
+            List<byte> bytesToWrite = new List<byte>(openedFile.header);
+            for (int i = 0; i < openedFile.data.Count; i++)
             {
-                case (FileType.png):
-                    sfd.Filter = "Portable Network Graphics (*.png)|*.png";
-                    break;
-                case (FileType.mng):
-                    sfd.Filter = "Multiple Network Graphics (*.mng)|*.mng";
-                    break;
-                case (FileType.jng):
-                    sfd.Filter = "JPEG Network Graphics (*.jng)|*.jng";
-                    break;
+                bytesToWrite.AddRange(BitConverter.GetBytes(openedFile.data[i].length).Reverse().ToArray());
+                bytesToWrite.AddRange(openedFile.data[i].type);
+                bytesToWrite.AddRange(openedFile.data[i].data);
+                bytesToWrite.AddRange(openedFile.data[i].crc);
             }
-            sfd.Filter += "All Files (*.*)|*.*";
-            sfd.AddExtension = true;
-
-            if (sfd.ShowDialog() == DialogResult.OK)
-            {*/
-                List<byte> bytesToWrite = new List<byte>(openedFile.header);
-                for (int i = 0; i < openedFile.data.Count; i++)
-                {
-                    bytesToWrite.AddRange(BitConverter.GetBytes(openedFile.data[i].length).Reverse().ToArray());
-                    bytesToWrite.AddRange(openedFile.data[i].type);
-                    bytesToWrite.AddRange(openedFile.data[i].data);
-                    bytesToWrite.AddRange(openedFile.data[i].crc);
-                }
             return bytesToWrite.ToArray();
-               /*File.WriteAllBytes(sfd.FileName, bytesToWrite.ToArray());
-            }*/
         }
 
         //-----------------------------------------------------------------\\

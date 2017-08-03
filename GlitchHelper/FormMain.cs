@@ -28,36 +28,39 @@ namespace GlitchHelper
         private void Form1_Load(object sender, EventArgs e)
         {
             //Hotfile manager menu
-            hotfileManager.FormClosing += (_o, _e) => { _e.Cancel = true; toggleForm(hotfileManager, viewHotfileManager, false); };
-            viewHotfileManager.CheckedChanged += delegate { toggleForm(hotfileManager, viewHotfileManager, viewHotfileManager.Checked); };
+            hotfileManager.FormClosing += (_o, _e) => { _e.Cancel = true; viewHotfileManager.Checked = false; };
+            viewHotfileManager.CheckedChanged += delegate { toggleForm(hotfileManager, viewHotfileManager.Checked); };
 
             //Plugin loading stuff
             plugins = PluginLoader<IPlugin>.LoadPlugins(Path.Combine(Directory.GetCurrentDirectory(), @"Plugins"));
 
             if (plugins.Count <= 0 || plugins == null)
             {
-                MessageBox.Show("No Plugins Found. ;(");
+                MessageBox.Show("No Plugins Found. ;(\n(Plugins belong in a folder called \"Plugins\", placed in the same directory as the program itself)");
                 Close();
             }
             else
             {
+                openableFileTypes = string.Join("|", plugins.Select(x => x.filter)) + "|All Files (*.*)|*.*";
+                /*
                 for (int i = 0; i < plugins.Count; i++)
                     openableFileTypes += plugins.ElementAt(i).filter + "|";
-                openableFileTypes += "All Files (*.*)|*.*";
+                openableFileTypes += "|All Files (*.*)|*.*";
+                */
             }
 
             liveContextMenuStrip.Items.AddRange(defaultToolStripMenuItems);
             selectedPlugin = plugins.Count;
         }
 
-        private void toggleForm(Form form, ToolStripMenuItem button, bool state)
+        private void toggleForm(Form form, bool state)
         {
-            button.Checked = state;
             if (state)
                 form.Show();
             else
                 form.Hide();
         }
+
 
         #region Plugin Variables
         public static ICollection<IPlugin> plugins = null;
@@ -66,15 +69,15 @@ namespace GlitchHelper
 
         public static DataGridViewCell[] selectedCells;
 
-        public static string openableFileTypes = null;
-        public static string saveableFileType = null;
+        private static string openableFileTypes = null;
+        private static string saveableFileType = null;
         public static bool fileLoaded = false;
-        public static string savedFileLocation = null;
-
+        private static string savedFileLocation = null;
+        
         /// <summary>
         /// Contains the Default Tool Strip Menu Items
         /// </summary>
-        public static readonly ToolStripItem[] defaultToolStripMenuItems =
+        private static readonly ToolStripItem[] defaultToolStripMenuItems =
         {
             new ToolStripMenuItem("Export Selected...", null, delegate { exportSelectedToolStripMenuItem_Click(); }),
             new ToolStripMenuItem("Replace Selected...", null, delegate { replaceSelectedToolStripMenuItem_Click(); }),
@@ -91,7 +94,7 @@ namespace GlitchHelper
         /// <summary>
         /// The ContextMenuStrip that's actually in use/will be modified at runtime.
         /// </summary>
-        public static ContextMenuStrip liveContextMenuStrip = new ContextMenuStrip();
+        private static ContextMenuStrip liveContextMenuStrip = new ContextMenuStrip();
 
         #region Hotfile Variables
 
@@ -154,6 +157,7 @@ namespace GlitchHelper
 
                 #endregion
 
+                //TODO Some of this unloading/re-loading is unessicary
                 #region Unloading stuff
 
                 //Reset the title.
@@ -163,20 +167,23 @@ namespace GlitchHelper
                 iterateCount = 1;
 
                 //Tell the program we have nothing loaded anymore (even though we technically do)
-                fileLoaded = //false;
+                fileLoaded = false;
 
                 //Disable all buttons dependant on a file being loaded
                 //Main form
-                (menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["saveToolStripMenuItem"].Enabled =
-                (menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["saveAsToolStripMenuItem"].Enabled =
-                (menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["editHeaderToolStripMenuItem"].Enabled =
+                this.saveToolStripMenuItem.Enabled = false;
+                this.saveAsToolStripMenuItem.Enabled = false;
+                this.editHeaderToolStripMenuItem.Enabled = false;
+                //(menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["saveToolStripMenuItem"].Enabled =
+                //(menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["saveAsToolStripMenuItem"].Enabled =
+                //(menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["editHeaderToolStripMenuItem"].Enabled =
+
                 //Hotfile Manager
-                (hotfileManager.menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["setOutputFileToolStripMenuItem"].Enabled =
-                (hotfileManager.menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["autoExportToolStripMenuItem"].Enabled =
-                (hotfileManager.menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["autoExportModeToolStripMenuItem"].Enabled =
-                ((hotfileManager.menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["autoExportModeToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["overwriteToolStripMenuItem"].Enabled =
-                ((hotfileManager.menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["autoExportModeToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["iterateToolStripMenuItem"].Enabled =
-                false;
+                (hotfileManager.menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["setOutputFileToolStripMenuItem"].Enabled = false;
+                (hotfileManager.menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["autoExportToolStripMenuItem"].Enabled = false;
+                (hotfileManager.menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["autoExportModeToolStripMenuItem"].Enabled = false;
+                ((hotfileManager.menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["autoExportModeToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["overwriteToolStripMenuItem"].Enabled = false;
+                ((hotfileManager.menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["autoExportModeToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["iterateToolStripMenuItem"].Enabled = false;
 
                 //Remove any custom plugin options
                 (menuStrip1.Items["pluginOptionsToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items.Clear();
@@ -837,7 +844,7 @@ namespace GlitchHelper
         //--- ---\\
         #endregion
 
-        //NEEDS TO BE REFACTORED SINCE IT'S REALLY MESSY TO HAVE BOTH THE PLUGIN AND THIS FORM HAVE A REFERENCE TO THE SELECTED CELLS
+        //TODO stop sending each plugin a copy of the selected cells
         private void dataGridView1_SelectionChanged(object sender, EventArgs e)
         {
             selectedCells = plugins.ElementAt(selectedPlugin).selectedCells = dataGridView1.SelectedCells.Cast<DataGridViewCell>().OrderBy(c => c.ColumnIndex).OrderBy(c => c.RowIndex).ToArray();

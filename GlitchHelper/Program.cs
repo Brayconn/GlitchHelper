@@ -14,9 +14,11 @@ namespace GlitchHelper
         [STAThread]
         static void Main()
         {
+            
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new FormMain());
+            //Application.Run(new FormMain());
+            var test = new DataHandler();
         }
     }
 }

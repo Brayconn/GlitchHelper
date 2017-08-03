@@ -66,13 +66,13 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="DataHandler.cs" />
     <Compile Include="HotfileManager.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="HotfileManager.Designer.cs">
       <DependentUpon>HotfileManager.cs</DependentUpon>
     </Compile>
-    <Compile Include="networkGraphics.cs" />
     <Compile Include="FormMain.cs">
       <SubType>Form</SubType>
     </Compile>

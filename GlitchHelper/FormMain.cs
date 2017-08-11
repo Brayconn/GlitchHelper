@@ -18,42 +18,41 @@ namespace GlitchHelper
 {
     public partial class FormMain : Form
     {
-        public FormMain()
+        //TODO get rid of the static property of this(?)
+        public static DataHandler dataHandler {get; set;}
+        private HotfileManager hotfileManager { get; set; }
+                
+        public FormMain(DataHandler dh)
         {
+            dataHandler = dh;
+            dataHandler.FileLoaded += FileLoaded;
+            dataHandler.HotfileDeleted += HotfileDeleted;
+            dataHandler.HotfileChanged += HotfileChanged;
+
+            hotfileManager = new HotfileManager(dataHandler, this);
+            hotfileManager.FormClosing += (o, e) => { e.Cancel = true; viewHotfileManager.Checked = false; };
+            //viewHotfileManager.CheckedChanged += delegate { toggleForm(hotfileManager, viewHotfileManager.Checked); };
+
+
+            defaultToolStripMenuItems = new ToolStripItem[]
+            {
+                new ToolStripMenuItem("Export Selected...",null, ExportSelectedToolStripMenuItem_Click),
+                new ToolStripMenuItem("Replace Selected...", null, ReplaceSelectedToolStripMenuItem_Click),
+                new ToolStripSeparator(),
+                new ToolStripMenuItem("Create Hotfile...", null, CreateHotfileToolStripMenuItem_Click),
+                new ToolStripMenuItem()
+                {
+                    Text = "Add to Hotfile",
+                    Name = "addToHotfileToolStripMenuItem"
+                },
+                new ToolStripSeparator()
+            };
+            
+
             InitializeComponent();
         }
-
-        public static HotfileManager hotfileManager = new HotfileManager();
-
-        private void Form1_Load(object sender, EventArgs e)
-        {
-            //Hotfile manager menu
-            hotfileManager.FormClosing += (_o, _e) => { _e.Cancel = true; viewHotfileManager.Checked = false; };
-            viewHotfileManager.CheckedChanged += delegate { toggleForm(hotfileManager, viewHotfileManager.Checked); };
-
-            //Plugin loading stuff
-            plugins = PluginLoader<IPlugin>.LoadPlugins(Path.Combine(Directory.GetCurrentDirectory(), @"Plugins"));
-
-            if (plugins.Count <= 0 || plugins == null)
-            {
-                MessageBox.Show("No Plugins Found. ;(\n(Plugins belong in a folder called \"Plugins\", placed in the same directory as the program itself)");
-                Close();
-            }
-            else
-            {
-                openableFileTypes = string.Join("|", plugins.Select(x => x.filter)) + "|All Files (*.*)|*.*";
-                /*
-                for (int i = 0; i < plugins.Count; i++)
-                    openableFileTypes += plugins.ElementAt(i).filter + "|";
-                openableFileTypes += "|All Files (*.*)|*.*";
-                */
-            }
-
-            liveContextMenuStrip.Items.AddRange(defaultToolStripMenuItems);
-            selectedPlugin = plugins.Count;
-        }
-
-        private void toggleForm(Form form, bool state)
+                
+        private static void toggleForm(Form form, bool state)
         {
             if (state)
                 form.Show();
@@ -62,27 +61,29 @@ namespace GlitchHelper
         }
 
 
-        #region Plugin Variables
-        public static ICollection<IPlugin> plugins = null;
-        public static int selectedPlugin;
-        #endregion
+
+        private void Form1_Load(object sender, EventArgs e)
+        {   
+            //HACK really shouldn't have to do this/have this code be here of all places
+            liveContextMenuStrip.Items.AddRange(defaultToolStripMenuItems);
+            viewHotfileManager.CheckedChanged += delegate { toggleForm(hotfileManager, viewHotfileManager.Checked); };
+        }
+
+
+
 
         public static DataGridViewCell[] selectedCells;
 
-        private static string openableFileTypes = null;
-        private static string saveableFileType = null;
-        public static bool fileLoaded = false;
-        private static string savedFileLocation = null;
-        
         /// <summary>
         /// Contains the Default Tool Strip Menu Items
         /// </summary>
-        private static readonly ToolStripItem[] defaultToolStripMenuItems =
+        private readonly ToolStripItem[] defaultToolStripMenuItems;
+        /*=
         {
-            new ToolStripMenuItem("Export Selected...", null, delegate { exportSelectedToolStripMenuItem_Click(); }),
-            new ToolStripMenuItem("Replace Selected...", null, delegate { replaceSelectedToolStripMenuItem_Click(); }),
+            new ToolStripMenuItem("Export Selected...",null, ExportSelectedToolStripMenuItem_Click),
+            new ToolStripMenuItem("Replace Selected...", null, ReplaceSelectedToolStripMenuItem_Click),
             new ToolStripSeparator(),
-            new ToolStripMenuItem("Create Hotfile...", null, delegate { createHotfileToolStripMenuItem_Click(); }),
+            new ToolStripMenuItem("Create Hotfile...", null, CreateHotfileToolStripMenuItem_Click),
             new ToolStripMenuItem()
             {
                 Text = "Add to Hotfile",
@@ -90,173 +91,70 @@ namespace GlitchHelper
             },
             new ToolStripSeparator()
         };
-
+        */
         /// <summary>
         /// The ContextMenuStrip that's actually in use/will be modified at runtime.
         /// </summary>
         private static ContextMenuStrip liveContextMenuStrip = new ContextMenuStrip();
-
-        #region Hotfile Variables
-
-        public static Dictionary<string, Hotfile> hotfiles = new Dictionary<string, Hotfile>();
-        public static Dictionary<DataGridViewCell, string> cellsInHotfiles = new Dictionary<DataGridViewCell, string>();
-        public static string hotfileExportFile, hotfileIterationExportFile = null;
-        //public static string hotfileIterationExportFile = null;
-        public static bool autoExport = true;
-        public static bool iterateMode = false;
-        public static long iterateCount = 1;
-
-        public class Hotfile : FormMain
-        {
-            public FileSystemWatcher fileWatcher { get; set; }
-            public DataGridViewCell[] data { get; set; }
-
-            public Hotfile(string path, DataGridViewCell[] cells)
-            {
-                fileWatcher = new FileSystemWatcher(Path.GetDirectoryName(path), Path.GetFileName(path));
-                data = cells;
-                fileWatcher.EnableRaisingEvents = true;
-                fileWatcher.Changed += delegate { Hotfile_Changed(fileWatcher, data); };
-                fileWatcher.Renamed += Hotfile_Renamed;
-                //fileWatcher.Deleted += delegate { Hotfile_Deleted(Path.Combine(fileWatcher.Path, fileWatcher.Filter)); };
-                fileWatcher.Deleted += Hotfile_Deleted;
-            }
-        }
-
-        #endregion
-
+              
         private void openToolStripMenuItem_Click(object sender, EventArgs e)
         {
             OpenFileDialog ofd = new OpenFileDialog()
             {
-                Filter = openableFileTypes
+                Filter = dataHandler.openableFileTypes
             };
             //If the user selected something and said ok, then we can start working
             if (ofd.ShowDialog() == DialogResult.OK)
             {
-                #region Plugin Selection stuff
-
                 //Store the selected plugin
                 int newSelectedPlugin = ofd.FilterIndex - 1;
 
                 //If the user picked the last thing on the list, that means they selected "All Files", so we'll need to ask them what to import this file as
-                if (newSelectedPlugin == plugins.Count)
+                if (newSelectedPlugin == dataHandler.plugins.Count)
                 {
                     MessageBox.Show("This is the part where I would bring up a thing asking you what you want to import the file as, but I haven't made that yet, sooooo-");
                     return;
                 }
 
-                //Attempt to load the selected file
-                saveableFileType = plugins.ElementAt(newSelectedPlugin).Load(File.ReadAllBytes(ofd.FileName));
-                //If that operation returned null, stop, that means something went wrong
-                if (saveableFileType == null)
-                    return;
-
-                //If we've gotten this far, the new selected plugin is fine, so save it.
-                selectedPlugin = newSelectedPlugin;
-
-                #endregion
-
-                //TODO Some of this unloading/re-loading is unessicary
-                #region Unloading stuff
-
-                //Reset the title.
-                Text = "Glitch Helper";
-
-                //Reset the iterateCount
-                iterateCount = 1;
-
-                //Tell the program we have nothing loaded anymore (even though we technically do)
-                fileLoaded = false;
-
-                //Disable all buttons dependant on a file being loaded
-                //Main form
-                this.saveToolStripMenuItem.Enabled = false;
-                this.saveAsToolStripMenuItem.Enabled = false;
-                this.editHeaderToolStripMenuItem.Enabled = false;
-                //(menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["saveToolStripMenuItem"].Enabled =
-                //(menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["saveAsToolStripMenuItem"].Enabled =
-                //(menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["editHeaderToolStripMenuItem"].Enabled =
-
-                //Hotfile Manager
-                (hotfileManager.menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["setOutputFileToolStripMenuItem"].Enabled = false;
-                (hotfileManager.menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["autoExportToolStripMenuItem"].Enabled = false;
-                (hotfileManager.menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["autoExportModeToolStripMenuItem"].Enabled = false;
-                ((hotfileManager.menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["autoExportModeToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["overwriteToolStripMenuItem"].Enabled = false;
-                ((hotfileManager.menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["autoExportModeToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["iterateToolStripMenuItem"].Enabled = false;
-
-                //Remove any custom plugin options
-                (menuStrip1.Items["pluginOptionsToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items.Clear();
-                
-                //Remove everything from the contextMenuStrip
-                liveContextMenuStrip.Items.Clear();
-
-                //Re populate the context menu strip with the default buttons
-                liveContextMenuStrip.Items.AddRange(defaultToolStripMenuItems);
-
-                //Clear the datagridview
-                dataGridView1.Columns.Clear();
-                dataGridView1.Rows.Clear();
-
-                //Reset hotfile variables
-                for (int i = 0; i < hotfiles.Count; i++)
-                    hotfiles.ElementAt(i).Value.fileWatcher.Dispose();
-                hotfiles.Clear();
-                cellsInHotfiles.Clear();
-                hotfileManager.Text = "Hotfile Manager";
-                UpdateHotfileContextMenuStrip();
-                DisplayHotfilesInManager();
-                hotfileExportFile = //null;
-                hotfileIterationExportFile = //null;
-
-                //Reset where the user saved a file last
-                savedFileLocation = null;
-
-
-                #endregion
-
-                #region Loading stuff
-
-                //Set the title to be the opened file
-                Text = ofd.FileName;
-
-                //display the contents of the file
-                dataGridView1.Columns.AddRange(plugins.ElementAt(selectedPlugin).columns);
-                dataGridView1.Rows.AddRange(plugins.ElementAt(selectedPlugin).GetRows());
-                
-                //Add any custom ContextMenuStripItems and MenuStripItems
-                liveContextMenuStrip.Items.AddRange(plugins.ElementAt(selectedPlugin).customContextMenuStripButtons);
-                (menuStrip1.Items["pluginOptionsToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items.AddRange(plugins.ElementAt(selectedPlugin).customMenuStripOptions);
-                //Also, set the context menu strip to the one we've been editing (probably only matters the first time the program starts up)
-                dataGridView1.ContextMenuStrip = liveContextMenuStrip;
-
-                //Tell the program we have a file loaded now
-                fileLoaded = //true;
-
-                //Re enable all those buttons from earlier
-                //Main form
-                (menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["saveToolStripMenuItem"].Enabled =
-                (menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["saveAsToolStripMenuItem"].Enabled =
-                (menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["editHeaderToolStripMenuItem"].Enabled =
-                //Hotfile Manager
-                (hotfileManager.menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["setOutputFileToolStripMenuItem"].Enabled =
-                (hotfileManager.menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["autoExportToolStripMenuItem"].Enabled =
-                (hotfileManager.menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["autoExportModeToolStripMenuItem"].Enabled =
-                ((hotfileManager.menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["autoExportModeToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["overwriteToolStripMenuItem"].Enabled =
-                ((hotfileManager.menuStrip1.Items["fileToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["autoExportModeToolStripMenuItem"] as ToolStripMenuItem).DropDown.Items["iterateToolStripMenuItem"].Enabled =
-                true;
-                
-                #endregion
+                dataHandler.Load(ofd.FileName, newSelectedPlugin);
             }
         }
 
-        #region Export/Replace Code
+        public void FileLoaded(object o, EventArgs e)
+        {
+            //Disable all buttons dependant on a file being loaded
+            this.saveToolStripMenuItem.Enabled = true;
+            this.saveAsToolStripMenuItem.Enabled = true;
+            this.editHeaderToolStripMenuItem.Enabled = true;
+
+            //Remove any custom plugin options
+            this.pluginOptionsToolStripMenuItem.DropDown.Items.Clear();
+            this.pluginOptionsToolStripMenuItem.DropDown.Items.AddRange(dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).customMenuStripOptions);
+
+            //Reset the LiveContextMenuStrip
+            liveContextMenuStrip.Items.Clear();
+            liveContextMenuStrip.Items.AddRange(defaultToolStripMenuItems);
+            liveContextMenuStrip.Items.AddRange(dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).customContextMenuStripButtons);
+            dataGridView1.ContextMenuStrip = liveContextMenuStrip;
+
+            //Reset the datagridview
+            dataGridView1.Columns.Clear();
+            dataGridView1.Columns.AddRange(dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).columns);
+            dataGridView1.Rows.Clear();
+            dataGridView1.Rows.AddRange(dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).GetRows());
+            
+            //Set the title to be the opened file
+            this.Text = dataHandler.openFileLocation;            
+        }
+        
+        //HACK unsure if either of these should be here, or if they should be in DataHandler
+        #region Export/Replace Stuff
 
         /// <summary>
         /// Fires whenever the user clicks the "Export Selected" Context Menu Strip item.
         /// Prompts the user to pick where they'd like to export the selected cells to.
         /// </summary>
-        private static void exportSelectedToolStripMenuItem_Click()
+        private void ExportSelectedToolStripMenuItem_Click(object o, EventArgs e)
         {
             if (selectedCells.Length > 0)
             {
@@ -267,7 +165,7 @@ namespace GlitchHelper
                 };
                 //If the user selected something, write the bytes from the ExportSelectedAsArray command from the loaded plugin
                 if (sfd.ShowDialog() == DialogResult.OK)
-                    File.WriteAllBytes(sfd.FileName, plugins.ElementAt(selectedPlugin).ExportSelectedAsArray());
+                    File.WriteAllBytes(sfd.FileName, dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).ExportSelectedAsArray());
             }
         }
 
@@ -275,7 +173,7 @@ namespace GlitchHelper
         /// Fires whenever the user clicks the "Replace Selected" Context Menu Strip item.
         /// Prompts the user to pick a file to replace the selected cells with.
         /// </summary>
-        private static void replaceSelectedToolStripMenuItem_Click()
+        private void ReplaceSelectedToolStripMenuItem_Click(object o, EventArgs e)
         {
             if (selectedCells.Length > 0)
             {
@@ -285,9 +183,11 @@ namespace GlitchHelper
                 };
                 //If the user selected something, use the replace command from the loaded plugin
                 if (ofd.ShowDialog() == DialogResult.OK)
-                    plugins.ElementAt(selectedPlugin).ReplaceSelectedWith(File.ReadAllBytes(ofd.FileName));
+                    dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).ReplaceSelectedWith(File.ReadAllBytes(ofd.FileName));
             }
         }
+
+        #endregion
 
         #region Saving Stuff
 
@@ -298,20 +198,20 @@ namespace GlitchHelper
         /// <param name="e"></param>
         private void saveToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            if(fileLoaded)
+            if(dataHandler.savedFileLocation != null)
             {
                 //If we have yet to save the file anywhere, we're going to need to ask for it
-                if (savedFileLocation == null)
+                if (dataHandler.savedFileLocation == null)
                 {
                     string newLocation = getSavedFileLocation();
                     //If the new location is still null, that means the user canceled, so we stop
                     if (newLocation == null)
                         return;
                     else
-                        savedFileLocation = newLocation;
+                        dataHandler.savedFileLocation = newLocation;
                 }
                 //If we haven't returned by this point, we're good to do the saving
-                File.WriteAllBytes(savedFileLocation, plugins.ElementAt(selectedPlugin).ExportAll());
+                File.WriteAllBytes(dataHandler.savedFileLocation, dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).ExportAll());
             }
         }
 
@@ -322,17 +222,15 @@ namespace GlitchHelper
         /// <param name="e"></param>
         private void saveAsToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            if (fileLoaded)
+            if (dataHandler.savedFileLocation != null)
             {
                 string newLocation = getSavedFileLocation();
                 //If that returned null, that means the user canceled, so we stop
-                if (newLocation == null)
-                    return;
-                else
+                if (newLocation != null)
                 {
                     //Set the new save location and save
-                    savedFileLocation = newLocation;
-                    File.WriteAllBytes(savedFileLocation, plugins.ElementAt(selectedPlugin).ExportAll());
+                    dataHandler.savedFileLocation = newLocation;
+                    File.WriteAllBytes(dataHandler.savedFileLocation, dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).ExportAll());
                 }
             }
         }
@@ -345,7 +243,7 @@ namespace GlitchHelper
         {
             SaveFileDialog sfd = new SaveFileDialog()
             {
-                Filter = saveableFileType + "|All Files (*.*)|*.*",
+                Filter = dataHandler.saveableFileType + "|All Files (*.*)|*.*",
                 AddExtension = true
             };            
             //Return either the file path the user chose, or, if the user canceled, null
@@ -354,197 +252,63 @@ namespace GlitchHelper
 
         #endregion
 
-        #endregion
-
         #region Hotfile stuff
 
+        //HACK unsure if either of these should be here, or if they should be in DataHandler
         /// <summary>
         /// Fires whenever the user clicks the "Create Hotfile" tool strip menu item.
         /// </summary>
-        private static void createHotfileToolStripMenuItem_Click()
+        private void CreateHotfileToolStripMenuItem_Click(object o, EventArgs e)
         {
             //If the user has selected some cells, then we can do the stuff
             if (selectedCells.Length > 0)
             {
-                //Create a new hotfile useing the selected cells
-                NewHotfile(selectedCells);
-            }
-        }
-
-        /// <summary>
-        /// Fires whenever a hotfile is renamed.
-        /// ...Renames the hotfile...
-        /// </summary>
-        /// <param name="e">The RenamedEventArgs realted to the renaming.</param>
-        public void Hotfile_Renamed(object o, RenamedEventArgs e)
-        {
-            //Store the hotfile we're about to rename
-            Hotfile renamedHotfile = hotfiles[e.OldFullPath];
-
-            //Change the hotfile we just stored to have the new file loaction
-            renamedHotfile.fileWatcher.Path = Path.GetDirectoryName(e.FullPath);
-            renamedHotfile.fileWatcher.Filter = Path.GetFileName(e.FullPath);
-
-            //Delete the old hotfile/add the new one
-            //hotfiles[oldPath].fileWatcher.Dispose();
-            hotfiles.Remove(e.OldFullPath);
-            hotfiles.Add(e.FullPath, renamedHotfile);
-
-            //Delete any cells that were assigned to the old hotfile and re-add them to the list with the new path
-            DataGridViewCell[] cellsToRename = cellsInHotfiles.Where(x => x.Value == e.OldFullPath).Select(x => x.Key).ToArray();
-            for(int i = 0; i< cellsToRename.Length; i++)
-            {
-                cellsInHotfiles.Remove(cellsToRename[i]);
-                cellsInHotfiles.Add(cellsToRename[i], e.FullPath);
-            }
-
-            //Update the displays
-            UpdateHotfileContextMenuStrip();
-            DisplayHotfilesInManager();
-        }
-
-        /// <summary>
-        /// Fires whenever a hotfile has its contents changed.
-        /// Replaces the given cells with the contents of the watched file.
-        /// </summary>
-        /// <param name="fsw">The FileSystemWatcher that is watching the hotfile.</param>
-        /// <param name="cells">the cells to be replaced.</param>
-        public void Hotfile_Changed(FileSystemWatcher fsw, DataGridViewCell[] cells)
-        {
-            int trycount = 0;
-            try
-            {
-                plugins.ElementAt(selectedPlugin).ReplaceSelectedWith(File.ReadAllBytes(Path.Combine(fsw.Path, fsw.Filter)),cells);
-            }
-            //If we encounter an IOException, that just means that something is still holding up the replacement of the file, so try again. (Maximum of 10 trys; not sure if this is the best idea?)
-            catch(IOException)
-            {
-                if (trycount < 10)
+                //If autoexport is on, but the user hasn't provided an auto export location, ask for one
+                if (dataHandler.hotfileExportFile == null && dataHandler.autoExport)
                 {
-                    trycount++;
-                    Hotfile_Changed(fsw, cells);
-                }
-                else
-                {
-                    MessageBox.Show("Replacement failed. :(", "ERROR");
-                    return;
-                }
-            }
-            if (autoExport)
-            {
-                var bytesToWrite = plugins.ElementAt(selectedPlugin).ExportAll();
-
-                //If the file we've exported something before, and the file we're about to write is no different than the last one we exported, then we stop
-                if(File.Exists((iterateMode) ? hotfileIterationExportFile : hotfileExportFile))
-                    if (Enumerable.SequenceEqual(bytesToWrite, (iterateMode) ? File.ReadAllBytes(hotfileIterationExportFile) : File.ReadAllBytes(hotfileExportFile)))
+                    SetHotfileOutput();
+                    //If the hotfileExportFile is still null, return
+                    if (dataHandler.hotfileExportFile == null)
                         return;
-
-                var fileToWrite = hotfileExportFile;
-
-                if (iterateMode)
-                {
-                    var hotfileExtention = Path.GetExtension(hotfileIterationExportFile);
-                    var hotfilePathName = hotfileIterationExportFile.Remove(hotfileIterationExportFile.Length - hotfileExtention.Length, hotfileExtention.Length);
-
-                    //As long as the file exists, keep iterating through numbers
-                    while (File.Exists(hotfileIterationExportFile))
-                    {
-                        //Replace the existing number
-                        if (Regex.IsMatch(hotfilePathName, @"\(\d+\)$"))
-                            hotfilePathName = Regex.Replace(hotfilePathName, @"\(\d+\)$", $"({iterateCount})");
-                        //Add a new number
-                        else
-                            hotfilePathName += $"({iterateCount})";
-                        
-                        iterateCount++;
-                        hotfileIterationExportFile = hotfilePathName + hotfileExtention;
-                    }
-
-                    fileToWrite = hotfileIterationExportFile;
                 }
-                File.WriteAllBytes(fileToWrite, bytesToWrite);
-                
-                /*
-                switch (iterateMode)
+
+                //Next, ask the user where they want the new hotfile to be
+
+                SaveFileDialog sfd = new SaveFileDialog()
                 {
-                    //If we're supposed to be iterating, then we have work to do
-                    case (true):
-                        //If the file we're about to export is different than the file that's already there, then we can export
-                        if (!Enumerable.SequenceEqual(bytesToWrite, File.ReadAllBytes(hotfileIterationExportFile)))
-                        {
-                            //Split the hotfile's path into a ton of different variables
-                            var hotfileExtention = Path.GetExtension(hotfileIterationExportFile);
-                            var hotfilePathName = hotfileIterationExportFile.Remove(hotfileIterationExportFile.Length - hotfileExtention.Length, hotfileExtention.Length);
+                    Filter = "Text Files (*.txt;)|*.txt|All Files (*.*)|*.*",
+                    AddExtension = true,
+                    Title = "Pick a destination hotfile."
+                };
 
-                            //As long as the file exists, keep iterating through numbers
-                            while (File.Exists(hotfileIterationExportFile))
-                            {
-                                //Replace the existing number
-                                if (Regex.IsMatch(hotfilePathName, @"\(\d+\)$"))
-                                    hotfilePathName = Regex.Replace(hotfilePathName, @"\(\d+\)$", $"({iterateCount})");
-                                //Add a new number
-                                else
-                                    hotfilePathName += $"({iterateCount})";
-                                //Increase the number
-                                iterateCount++;
-                                //Set the new file location
-                                hotfileIterationExportFile = hotfilePathName + hotfileExtention;
-                            }
-
-                            //Finally export the file
-                            File.WriteAllBytes(hotfileIterationExportFile, bytesToWrite);
-                        }
-                        break;
-                    case (false):
-                        //If the file we're about to export is different than the file that's already there, then we can export
-                        if (!Enumerable.SequenceEqual(bytesToWrite, File.ReadAllBytes(hotfileExportFile)))
-                            File.WriteAllBytes(hotfileExportFile, bytesToWrite);
-                        break;
+                if (sfd.ShowDialog() == DialogResult.OK)
+                {
+                    dataHandler.NewHotfile(selectedCells, sfd.FileName);                   
                 }
-                */
             }
-        }
-        
-        /// <summary>
-        /// Delete the given hotfile.
-        /// </summary>
-        /// <param name="hotfile">The path of the hotfile to delete</param>
-        public void Hotfile_Deleted(object o, FileSystemEventArgs e)
-        {
-            //Dispose of the removed hotfile's FileSystemWatcher, then remove it from the hotfile list
-            hotfiles[e.FullPath].fileWatcher.Dispose();
-            hotfiles.Remove(e.FullPath);
-
-            //Get all cells that are associated with said hotfile and remove each cell from the cellsInHotfiles dictionary
-            DataGridViewCell[] cellsToRemove = cellsInHotfiles.Where(x => x.Value == e.FullPath).Select(x => x.Key).ToArray();
-            for (int i = 0; i < cellsToRemove.Length; i++)
-                cellsInHotfiles.Remove(cellsToRemove[i]);
-
-            //Push these updates to the contextMenuStrip, and the HotfileManager
-            UpdateHotfileContextMenuStrip();
-            DisplayHotfilesInManager();
         }
         
         /// <summary>
         /// Ask the user where they'd like to set the hotfile's autoexport file to.
         /// </summary>
         /// <returns>The path of the file the user has set.</returns>
-        public static void SetHotfileOutput()
+        public void SetHotfileOutput()
         {
             SaveFileDialog sfd = new SaveFileDialog()
             {
-                Filter = saveableFileType + "|All Files (*.*)|*.*",
+                Filter = dataHandler.saveableFileType + "|All Files (*.*)|*.*",
                 AddExtension = true,
                 Title = "Pick a destination output file."
             };
             //Only save the file if the new FileName is different than the one that was already there
-            if (sfd.ShowDialog() == DialogResult.OK && sfd.FileName != hotfileExportFile)
+            if (sfd.ShowDialog() == DialogResult.OK && sfd.FileName != dataHandler.hotfileExportFile)
             {
-                iterateCount = 1;
-                hotfileIterationExportFile = hotfileExportFile = sfd.FileName;
+                dataHandler.iterateCount = 1;
+                dataHandler.hotfileIterationExportFile = dataHandler.hotfileExportFile = sfd.FileName;
             }
         }
-
+        
+        /*
         /// <summary>
         /// Creates a new hotfile out of the cells provided.
         /// </summary>
@@ -589,7 +353,9 @@ namespace GlitchHelper
             UpdateHotfileContextMenuStrip();
             DisplayHotfilesInManager();
         }
-        
+        */
+
+        /*
         /// <summary>
         /// Adds the given cells to the given hotfile.
         /// </summary>
@@ -613,7 +379,9 @@ namespace GlitchHelper
 
             DisplayHotfilesInManager();
         }
+        */
 
+        /*
         /// <summary>
         /// Removes the hotfile (or part of hotfile) represented by the given TreeNode.
         /// </summary>
@@ -659,9 +427,39 @@ namespace GlitchHelper
             UpdateHotfileContextMenuStrip();
             DisplayHotfilesInManager();
         }
+        */
 
         //----------------------------------------------------------------------\\
 
+        //TODO might need to use invokes/delegates here (assuming that's even good practice...)
+        private void HotfileDeleted(object o, DataHandler.HotfileDeletedEventArgs e)
+        {
+            (liveContextMenuStrip.Items["addToHotfileToolStripMenuItem"] as ToolStripMenuItem).DropDownItems.RemoveByKey(e.name);
+        }
+
+        //TODO might need to use invokes/delegates here (assuming that's even good practice...)
+        private void HotfileChanged(object o, DataHandler.HotfileModifiedEventArgs e)
+        {
+            if(!(liveContextMenuStrip.Items["addToHotfileToolStripMenuItem"] as ToolStripMenuItem).DropDownItems.ContainsKey(e.name))
+            {
+                ToolStripMenuItem t = new ToolStripMenuItem
+                {
+                    Text = e.name,
+                    Name = e.name
+                };
+                t.Click += delegate { dataHandler.AddtoHotfile(selectedCells, e.name); };
+                (liveContextMenuStrip.Items["addToHotfileToolStripMenuItem"] as ToolStripMenuItem).DropDownItems.Add(t);
+                /*
+                (liveContextMenuStrip.Items["addToHotfileToolStripMenuItem"] as ToolStripMenuItem).DropDownItems.Add(
+                        e.name,
+                        null,
+                        delegate { dataHandler.AddtoHotfile(selectedCells, e.name); }
+                        );
+            */
+            }
+        }
+
+        /*
         /// <summary>
         /// ...Pretty self explanitory tbh... Displays all loaded hotfiles in the Hotfile Manager.
         /// </summary>
@@ -677,7 +475,7 @@ namespace GlitchHelper
             /* Maybe should be using this instead?
             foreach(var entry in hotfiles)
                 hotfilesForFunction.Add(entry.Key, entry.Value.data);
-            */
+            * /
 
             //Let the loaded plugin do the actual displaying part
             plugins.ElementAt(selectedPlugin).DisplayHotfilesInManager(hotfileManager.treeView1, hotfilesForFunction);
@@ -704,6 +502,7 @@ namespace GlitchHelper
             }
         }
 
+        /*
         /// <summary>
         /// Returns what cells out of the given cells are safe to be adding to hotfiles.
         /// Will return null if the user cancels at this point.
@@ -741,6 +540,7 @@ namespace GlitchHelper
             //Return the safe cells
             return safeCells.ToArray();
         }
+        */
 
         #endregion
 
@@ -756,13 +556,13 @@ namespace GlitchHelper
 
         private void dataGridView1_CellEndEdit(object sender, DataGridViewCellEventArgs e)
         {
-            plugins.ElementAt(selectedPlugin).CellEndEdit(dataGridView1[e.ColumnIndex, e.RowIndex]);
-            plugins.ElementAt(selectedPlugin).UpdateRows(dataGridView1.Rows[e.RowIndex]);
+            dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).CellEndEdit(dataGridView1[e.ColumnIndex, e.RowIndex]);
+            dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).UpdateRows(dataGridView1.Rows[e.RowIndex]);
         }
 
         private void dataGridView1_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
         {
-            plugins.ElementAt(selectedPlugin).CellFormating(e);
+            dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).CellFormating(e);
         }
         
         #region Drag and Drop code
@@ -837,7 +637,7 @@ namespace GlitchHelper
                     rowIndexOfItemUnderMouseToDrop--;
                 dataGridView1.Rows.Insert(rowIndexOfItemUnderMouseToDrop, rowToMove);
 
-                plugins.ElementAt(selectedPlugin).Move(rowIndexFromMouseDown, rowIndexOfItemUnderMouseToDrop);
+                dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).MoveChunk(rowIndexFromMouseDown, rowIndexOfItemUnderMouseToDrop);
 
             }
         }
@@ -847,7 +647,7 @@ namespace GlitchHelper
         //TODO stop sending each plugin a copy of the selected cells
         private void dataGridView1_SelectionChanged(object sender, EventArgs e)
         {
-            selectedCells = plugins.ElementAt(selectedPlugin).selectedCells = dataGridView1.SelectedCells.Cast<DataGridViewCell>().OrderBy(c => c.ColumnIndex).OrderBy(c => c.RowIndex).ToArray();
+            selectedCells = dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).selectedCells = dataGridView1.SelectedCells.Cast<DataGridViewCell>().OrderBy(c => c.ColumnIndex).OrderBy(c => c.RowIndex).ToArray();
             //plugins.ElementAt(selectedPlugin).selectedCells = selectedCells;
             
 

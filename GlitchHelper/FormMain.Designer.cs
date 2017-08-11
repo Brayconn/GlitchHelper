@@ -174,10 +174,10 @@
         public System.Windows.Forms.DataGridView dataGridView1;
         private System.Windows.Forms.ToolStripMenuItem editToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem viewToolStripMenuItem;
-        private System.Windows.Forms.ToolStripMenuItem viewHotfileManager;
         private System.Windows.Forms.ToolStripMenuItem editHeaderToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem pluginOptionsToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem saveToolStripMenuItem;
+        public System.Windows.Forms.ToolStripMenuItem viewHotfileManager;
     }
 }
 

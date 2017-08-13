@@ -32,17 +32,21 @@ namespace GlitchHelper
         }
 
         //HACK...maybe?
-        private delegate void _HotfileChanged(object sender, DataHandler.HotfileModifiedEventArgs e);
+        private delegate void HotfileChangedDelegate(object sender, DataHandler.HotfileModifiedEventArgs e);
         private void HotfileChanged(object sender, DataHandler.HotfileModifiedEventArgs e)
         {
             if (treeView1.InvokeRequired)
             {
-                _HotfileChanged hc = new _HotfileChanged(HotfileChanged);
+                /*
+                HotfileChangedDelegate hc = new HotfileChangedDelegate(HotfileChanged);
                 this.Invoke(hc, new object[] { sender, e });
+                */
+                Invoke(new HotfileChangedDelegate(HotfileChanged), new object[] { sender, e });
             }
             else
             {
-                //TODO maybe I should be using this insetad? if (!treeView1.Nodes[e.name] == null)
+                //TODO maybe I should be using this instead:
+                //if (!treeView1.Nodes[e.name] == null)
                 if (!treeView1.Nodes.ContainsKey(e.name))
                     treeView1.Nodes.Add(e.name, e.name);
 
@@ -52,13 +56,16 @@ namespace GlitchHelper
         }
 
         //HACK...maybe?
-        private delegate void _HotfileDeleted(object sender, DataHandler.HotfileDeletedEventArgs e);
+        private delegate void HotfileDeletedDelegate(object sender, DataHandler.HotfileDeletedEventArgs e);
         private void HotfileDeleted(object sender, DataHandler.HotfileDeletedEventArgs e)
         {
             if(treeView1.InvokeRequired)
             {
-                _HotfileDeleted hd = new _HotfileDeleted(HotfileDeleted);
+                /*
+                HotfileDeletedDelegate hd = new HotfileDeletedDelegate(HotfileDeleted);
                 this.Invoke(hd, new object[] { sender, e });
+                */
+                Invoke(new HotfileDeletedDelegate(HotfileDeleted), new object[] { sender, e });
             }
             else
                 treeView1.Nodes[e.name].Remove();

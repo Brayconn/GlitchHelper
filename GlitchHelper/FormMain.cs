@@ -307,7 +307,7 @@ namespace GlitchHelper
                 dataHandler.hotfileIterationExportFile = dataHandler.hotfileExportFile = sfd.FileName;
             }
         }
-        
+
         /*
         /// <summary>
         /// Creates a new hotfile out of the cells provided.
@@ -431,31 +431,43 @@ namespace GlitchHelper
 
         //----------------------------------------------------------------------\\
 
-        //TODO might need to use invokes/delegates here (assuming that's even good practice...)
-        private void HotfileDeleted(object o, DataHandler.HotfileDeletedEventArgs e)
+        //HACK...maybe?
+        private delegate void HotfileDeletedDelegate(object sender, DataHandler.HotfileDeletedEventArgs e);
+        private void HotfileDeleted(object sender, DataHandler.HotfileDeletedEventArgs e)
         {
-            (liveContextMenuStrip.Items["addToHotfileToolStripMenuItem"] as ToolStripMenuItem).DropDownItems.RemoveByKey(e.name);
+            if (liveContextMenuStrip.InvokeRequired)
+                Invoke(new HotfileDeletedDelegate(HotfileDeleted), new object[] { sender, e });
+            else
+                (liveContextMenuStrip.Items["addToHotfileToolStripMenuItem"] as ToolStripMenuItem).DropDownItems.RemoveByKey(e.name);
         }
 
-        //TODO might need to use invokes/delegates here (assuming that's even good practice...)
-        private void HotfileChanged(object o, DataHandler.HotfileModifiedEventArgs e)
+        //HACK...maybe?
+        private delegate void HotfileChangedDelegate(object sender, DataHandler.HotfileModifiedEventArgs e);
+        private void HotfileChanged(object sender, DataHandler.HotfileModifiedEventArgs e)
         {
-            if(!(liveContextMenuStrip.Items["addToHotfileToolStripMenuItem"] as ToolStripMenuItem).DropDownItems.ContainsKey(e.name))
+            if(liveContextMenuStrip.InvokeRequired)
             {
-                ToolStripMenuItem t = new ToolStripMenuItem
+                Invoke(new HotfileChangedDelegate(HotfileChanged),new object[] {sender,e});
+            }
+            else
+            {
+                if (!(liveContextMenuStrip.Items["addToHotfileToolStripMenuItem"] as ToolStripMenuItem).DropDownItems.ContainsKey(e.name))
                 {
-                    Text = e.name,
-                    Name = e.name
-                };
-                t.Click += delegate { dataHandler.AddtoHotfile(selectedCells, e.name); };
-                (liveContextMenuStrip.Items["addToHotfileToolStripMenuItem"] as ToolStripMenuItem).DropDownItems.Add(t);
-                /*
-                (liveContextMenuStrip.Items["addToHotfileToolStripMenuItem"] as ToolStripMenuItem).DropDownItems.Add(
-                        e.name,
-                        null,
-                        delegate { dataHandler.AddtoHotfile(selectedCells, e.name); }
-                        );
-            */
+                    ToolStripMenuItem t = new ToolStripMenuItem
+                    {
+                        Text = e.name,
+                        Name = e.name
+                    };
+                    t.Click += delegate { dataHandler.AddtoHotfile(selectedCells, e.name); };
+                    (liveContextMenuStrip.Items["addToHotfileToolStripMenuItem"] as ToolStripMenuItem).DropDownItems.Add(t);
+                    /*
+                    (liveContextMenuStrip.Items["addToHotfileToolStripMenuItem"] as ToolStripMenuItem).DropDownItems.Add(
+                            e.name,
+                            null,
+                            delegate { dataHandler.AddtoHotfile(selectedCells, e.name); }
+                            );
+                */
+                }
             }
         }
 

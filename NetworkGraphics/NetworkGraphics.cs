@@ -12,7 +12,7 @@ using System.Text.RegularExpressions;
 
 namespace NetworkGraphics
 {
-    public class NetworkGraphics : IPlugin
+    public class NetworkGraphics : IGHPlugin
     {
         public string filter
         {
@@ -1389,7 +1389,7 @@ namespace NetworkGraphics
 
         }
 
-        public void Move(int rowIndexFromMouseDown, int rowIndexOfItemUnderMouseToDrop)
+        public void MoveChunk(int rowIndexFromMouseDown, int rowIndexOfItemUnderMouseToDrop)
         {
             var chunktoMove = openedFile.data[rowIndexFromMouseDown];
             openedFile.data.RemoveAt(rowIndexFromMouseDown);
@@ -1498,6 +1498,7 @@ namespace NetworkGraphics
             }
         }
         */
+        /*
         public void DisplayHotfilesInManager(TreeView tv, Dictionary<string, DataGridViewCell[]> hotfiles)
         {
             foreach(var entry in hotfiles)
@@ -1524,6 +1525,34 @@ namespace NetworkGraphics
                     tv.Nodes[entry.Key].Nodes.Add(nodeName, nodeName);
                 }
             }
+        }
+        */
+        public TreeNode GetHotfileInfo(DataGridViewCell cell)
+        {
+            string nodeName = "Chunk " + (cell.RowIndex + 1);
+            switch (cell.ColumnIndex)
+            {
+                case (0):
+                    nodeName += " Length";
+                    break;
+                case (1):
+                    nodeName += " Type";
+                    break;
+                case (2):
+                    nodeName += " Data";
+                    break;
+                case (3):
+                    nodeName += " CRC";
+                    break;
+            }
+            return new TreeNode(nodeName);
+        }
+        public TreeNode[] GetHotfileInfo(DataGridViewCell[] cells)
+        {
+            TreeNode[] nodes = new TreeNode[cells.Length];
+            for (int i = 0; i < cells.Length; i++)
+                nodes[i] = GetHotfileInfo(cells[i]);
+            return nodes;
         }
     }
 }

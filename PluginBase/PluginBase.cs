@@ -8,7 +8,7 @@ using System.Windows.Forms;
 
 namespace PluginBase
 {
-    public interface IPlugin
+    public interface IGHPlugin
     {
         /// <summary>
         /// Filter meant for OpenFileDialog.Filter
@@ -88,7 +88,7 @@ namespace PluginBase
         /// </summary>
         /// <param name="rowIndexFromMouseDown">Row of chunk to move</param>
         /// <param name="rowIndexOfItemUnderMouseToDrop">Row of chunk to displace</param>
-        void Move(int rowIndexFromMouseDown, int rowIndexOfItemUnderMouseToDrop);
+        void MoveChunk(int rowIndexFromMouseDown, int rowIndexOfItemUnderMouseToDrop);
 
         /// <summary>
         /// Formats the given cell
@@ -98,12 +98,15 @@ namespace PluginBase
 
         //Was a good idea, since it forced plugin makers to have a function that added a new chunk/row/whatever, but it really just didn't pan out.
         //void RowsAdded(DataGridViewRowsAddedEventArgs e);
-
+        /*
         /// <summary>
         /// ...Pretty self explanitory... Displays the given hotfiles into the given TreeView.
         /// </summary>
         /// <param name="tv">The TreeView to populate.</param>
         /// <param name="hotfiles">The hotfiles to add.</param>
         void DisplayHotfilesInManager(TreeView tv, Dictionary<string, DataGridViewCell[]> hotfiles);
+        */
+        TreeNode GetHotfileInfo(DataGridViewCell cell);
+        TreeNode[] GetHotfileInfo(DataGridViewCell[] cells);
     }
 }

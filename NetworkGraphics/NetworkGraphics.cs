@@ -103,21 +103,15 @@ namespace NetworkGraphics
             }
         }
 
-        /*
-        public static readonly IEnumerable<byte[]> headers = new List<byte[]>()
-        { new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }, //png
-          new byte[] { 0x8A, 0x4D, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }, //mng
-          new byte[] { 0x8B, 0x4A, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }  //jng
-        };*/
         #region Default Headers
         private static readonly byte[] pngHeader = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
         private static readonly byte[] mngHeader = { 0x8A, 0x4D, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
         private static readonly byte[] jngHeader = { 0x8B, 0x4A, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
         #endregion
 
-        public static bool verboseCRCChecks = false;
-        public static bool autoCalculateCRC = true;
-        private static NetworkGraphic openedFile;
+        public bool verboseCRCChecks = false;
+        public bool autoCalculateCRC = true;
+        private NetworkGraphic openedFile;
         private enum FileType
         {
             png,
@@ -230,6 +224,7 @@ namespace NetworkGraphics
 
         #endregion
 
+        //TODO have the crc table be declared inline to save on re-calculating every time the user starts the program (might be a terrible idea)
         /// <summary>
         /// Table containing the crc of all possible byte values
         /// </summary>
@@ -258,7 +253,8 @@ namespace NetworkGraphics
             public chunk()
             {
                 length = 0;
-                type = Encoding.ASCII.GetBytes("IEND");
+                //type = Encoding.ASCII.GetBytes("IEND");
+                type = new byte[] { 0x49, 0x45, 0x4e, 0x44 };
                 data = new byte[0];
                 crc = new byte[] { 174, 66, 96, 130 };
             }
@@ -742,6 +738,7 @@ namespace NetworkGraphics
             if (cells == null)
                 cells = selectedCells;
 
+            //TODO maybe replace with linq?
             List<byte[]> output = new List<byte[]>();
             for (int i = 0; i < cells.Length; i++)
                 output.Add(GetCellData(cells[i]));
@@ -762,7 +759,8 @@ namespace NetworkGraphics
         {
             if (cells == null)
                 cells = selectedCells;
-
+                        
+            //TODO maybe replace with linq?
             List<byte> output = new List<byte>();
             for (int i = 0; i < cells.Length; i++)
                 output.AddRange(GetCellData(cells[i]));
@@ -781,8 +779,9 @@ namespace NetworkGraphics
                     return openedFile.data[cell.RowIndex].data;
                 case (3):
                     return openedFile.data[cell.RowIndex].crc;
+                default:
+                    return null;
             }
-            return null;
         }
 
         #endregion
@@ -883,6 +882,7 @@ namespace NetworkGraphics
 
             if (cells.Any(x => x.RowIndex >= openedFile.data.Count))
             {
+                //TODO replace all MessageBox.show stuff here (maybe use exceptions?)
                 int badCells = cells.Where(x => x.RowIndex >= openedFile.data.Count).Count();
                 if (badCells == cells.Length)
                 {
@@ -941,13 +941,20 @@ namespace NetworkGraphics
 
                 for (int i = 0; i < cells.Length; i++)
                 {
-                    /*
+                    /* Explanation of that one line down below
+                    
                     decimal percent = decimal.Divide(openedFile.data[cells[i].RowIndex].data.Length, lengthOfcells);
+                                        
                     decimal amount = percent * lengthOfReplacementBytes;
-                    int amountToTake = (int)amount;
+
+                    //TODO maybe use AwayFromZero?
+                    //TODO add support for when chunk length exceeds int max size
+                    int amountToTake = (int)Math.Round(amount);
+
                     openedFile.data[cells[i].RowIndex].data = replacementBytes.Take(amountToTake).ToArray();
+
                     */
-                    openedFile.data[cells[i].RowIndex].data = replacementBytes.Take((int)(decimal.Divide(openedFile.data[cells[i].RowIndex].data.Length, lengthOfcells) * lengthOfReplacementBytes)).ToArray();
+                    openedFile.data[cells[i].RowIndex].data = replacementBytes.Take((int)Math.Round(decimal.Divide(openedFile.data[cells[i].RowIndex].data.Length, lengthOfcells) * lengthOfReplacementBytes)).ToArray();
 
                     openedFile.data[cells[i].RowIndex].length = openedFile.data[cells[i].RowIndex].data.Length;
 
@@ -1004,10 +1011,13 @@ namespace NetworkGraphics
 
             if (autoCalculateCRC)
             {
+                /*
                 List<int> chunksToReCalculate = new List<int>();
                 for (int i = 0; i < cells.Length; i++)
                     if (!chunksToReCalculate.Contains(cells[i].RowIndex))
                         chunksToReCalculate.Add(cells[i].RowIndex);
+                */
+                int[] chunksToReCalculate = selectedCells.Select(x => x.RowIndex).OrderBy(x => x).Distinct().ToArray();
 
                 ReCalculateCRCOfChunk(chunksToReCalculate.ToArray());
             }
@@ -1128,10 +1138,15 @@ namespace NetworkGraphics
             //var selectedselectedCells = dgv.SelectedselectedCells;
             if (selectedCells.Length > 0)
             {
+                /*
                 List<int> chunksToReCalculate = new List<int>();
                 for (int i = 0; i < selectedCells.Length; i++)
                     if (!chunksToReCalculate.Contains(selectedCells[i].RowIndex))
                         chunksToReCalculate.Add(selectedCells[i].RowIndex);
+                */
+                
+                int[] chunksToReCalculate = selectedCells.Select(x => x.RowIndex).OrderBy(x => x).Distinct().ToArray();
+
 
                 ReCalculateCRCOfChunk(chunksToReCalculate.ToArray());
                 /*
@@ -1185,7 +1200,8 @@ namespace NetworkGraphics
         /// <param name="editedCell">The cell that has just been edited.</param>
         public void CellEndEdit(DataGridViewCell editedCell)
         {
-            //If there's no chunk assosiated with the edited cell, add a new chunk (I really don't know why there would ever be more than one discrepency like this, but just incase...)
+            //If there's no chunk assosiated with the edited cell, add a new chunk (will default to IEND)
+            //TODO change while to if(?)
             while(editedCell.RowIndex > openedFile.data.Count)
                 openedFile.data.Add(new chunk());
 
@@ -1386,7 +1402,6 @@ namespace NetworkGraphics
             }
             */
             #endregion
-
         }
 
         public void MoveChunk(int rowIndexFromMouseDown, int rowIndexOfItemUnderMouseToDrop)

@@ -83,6 +83,10 @@ namespace PluginBase
         /// <param name="editedCell">The cell whose data needs updating</param>
         void CellEndEdit(DataGridViewCell editedCell);
 
+        void UserAddedRow(DataGridViewRowEventArgs e);
+
+        void UserDeletingRow(DataGridViewRowCancelEventArgs e);
+
         /// <summary>
         /// Moves a given chunk to another place
         /// </summary>

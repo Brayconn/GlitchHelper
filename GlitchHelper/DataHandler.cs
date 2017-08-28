@@ -28,15 +28,19 @@ namespace GlitchHelper
         public Dictionary<string, Hotfile> hotfiles = new Dictionary<string, Hotfile>();
         public Dictionary<DataGridViewCell, string> cellsInHotfiles = new Dictionary<DataGridViewCell, string>();
         public string hotfileExportFile, hotfileIterationExportFile = null;
-        //public static string hotfileIterationExportFile = null;
-        public bool deleteEmptyHotfiles = true;
+        //public string hotfileIterationExportFile = null;
+        
         public bool autoExport = true;
         public bool iterateMode = false;
         public long iterateCount = 1;
 
+        public bool deleteOrphanedHotfiles = true;
+        public bool ignoreHotfileRenaming = false;
+        public bool ignoreHotfileDeletions = false;
+        
         public class Hotfile
         {
-            public DataHandler dataHandler { get; }
+            private DataHandler dataHandler { get; }
             public FileSystemWatcher fileWatcher { get; set; }
             public DataGridViewCell[] data { get; set; }
 
@@ -61,7 +65,9 @@ namespace GlitchHelper
         public DataHandler(string pluginPath = null)
         {
             if (pluginPath == null)
-                pluginPath = Path.Combine(Directory.GetCurrentDirectory(), @"Plugins");
+                pluginPath = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().CodeBase), @"Plugins");
+            else
+                pluginPath = Path.GetDirectoryName(pluginPath);
 
             //Plugin loading stuff
             plugins = PluginLoader<IGHPlugin>.LoadPlugins(pluginPath);
@@ -83,20 +89,24 @@ namespace GlitchHelper
             selectedPlugin = plugins.Count;
 
             HotfileChanged += UpdateHotfile;
-            HotfileDeleted += DeleteHotfile;
+            //See Line 184
+            //HotfileDeleted += DeleteHotfile;
         }
 
         public event EventHandler FileLoaded = new EventHandler((o,e) => { });
         public void Load(string filePath, int pluginToUse)
         {
-            saveableFileType = plugins.ElementAt(pluginToUse).Load(File.ReadAllBytes(filePath));
-            if(saveableFileType != null)
+            string newSaveableFileType = plugins.ElementAt(pluginToUse).Load(File.ReadAllBytes(filePath));
+            if(newSaveableFileType != null)
             {
+                Unload();
+
+                saveableFileType = newSaveableFileType;
                 openFileLocation = filePath;
 
-                iterateCount = 1;
                 selectedPlugin = pluginToUse;
 
+                /*
                 //Reset hotfile variables
                 for (int i = 0; i < hotfiles.Count; i++)
                     hotfiles.ElementAt(i).Value.fileWatcher.Dispose();
@@ -107,18 +117,34 @@ namespace GlitchHelper
                 //DisplayHotfilesInManager();
                 hotfileExportFile = null;
                 hotfileIterationExportFile = null;
-                
+                */
+
                 FileLoaded(this,new EventArgs());
             }
         }
         
-        //Not sure why this would ever be called but eh...
         public event EventHandler FileUnloaded = new EventHandler((o, e) => { });
         public void Unload()
         {
             selectedPlugin = plugins.Count;
             saveableFileType = null;
             savedFileLocation = null;
+
+            iterateCount = 1;
+
+            //TODO Probably can do this a better way...
+            for(int i = 0; i < hotfiles.Count; i++)
+            {
+                string hn = hotfiles.ElementAt(i).Key;
+                hotfiles.ElementAt(i).Value.fileWatcher.Dispose(); //HACK Unsure if I have to do this...?
+                if (deleteOrphanedHotfiles)
+                    File.Delete(hn);
+                HotfileDeleted(this, new HotfileDeletedEventArgs(hn));
+            }
+            hotfiles.Clear();
+            cellsInHotfiles.Clear();
+
+            hotfileExportFile = hotfileIterationExportFile = null;
 
             FileUnloaded(this, new EventArgs());
         }
@@ -156,12 +182,35 @@ namespace GlitchHelper
             }
         }
         public event EventHandler<HotfileDeletedEventArgs> HotfileDeleted = new EventHandler<HotfileDeletedEventArgs>((o, e) => { });
+
+        /* Might need this code later...
+        int dhTryCount = 0;
         private void DeleteHotfile(object o, HotfileDeletedEventArgs e)
         {
-            if (deleteEmptyHotfiles)
-                File.Delete(e.name);
+            if (!ignoreHotfileDeletions)
+            {
+                try
+                {
+                    File.Delete(e.name);
+                    dhTryCount = 0;
+                }
+                catch
+                {
+                    if (dhTryCount < 10)
+                    {
+                        dhTryCount++;
+                        DeleteHotfile(o, e);
+                    }
+                    else
+                    {
+                        MessageBox.Show("Deletion failed. :(", "ERROR");
+                        dhTryCount = 0;
+                    }
+                    return;
+                }
+            }
         }
-
+        */
 
         /// <summary>
         /// Fires whenever a hotfile is renamed.
@@ -170,28 +219,32 @@ namespace GlitchHelper
         /// <param name="e">The RenamedEventArgs realted to the renaming.</param>
         public void Hotfile_Renamed(object o, RenamedEventArgs e)
         {
-            //Store the hotfile we're about to rename
-            Hotfile renamedHotfile = hotfiles[e.OldFullPath];
-
-            //Change the hotfile we just stored to have the new file loaction
-            renamedHotfile.fileWatcher.Path = Path.GetDirectoryName(e.FullPath);
-            renamedHotfile.fileWatcher.Filter = Path.GetFileName(e.FullPath);
-
-            //Delete the old hotfile/add the new one
-            //hotfiles[oldPath].fileWatcher.Dispose();
-            hotfiles.Remove(e.OldFullPath);
-            hotfiles.Add(e.FullPath, renamedHotfile);
-
-            //Delete any cells that were assigned to the old hotfile and re-add them to the list with the new path
-            DataGridViewCell[] cellsToRename = cellsInHotfiles.Where(x => x.Value == e.OldFullPath).Select(x => x.Key).ToArray();
-            for (int i = 0; i < cellsToRename.Length; i++)
+            //TODO this probably needs work/might come into conflicts with this implementation
+            if (!ignoreHotfileRenaming && hotfiles.ContainsKey(e.OldFullPath) && !hotfiles.ContainsKey(e.FullPath))
             {
-                cellsInHotfiles.Remove(cellsToRename[i]);
-                cellsInHotfiles.Add(cellsToRename[i], e.FullPath);
-            }
+                //Store the hotfile we're about to rename
+                Hotfile renamedHotfile = hotfiles[e.OldFullPath];
 
-            HotfileDeleted(this, new HotfileDeletedEventArgs(e.OldFullPath));
-            HotfileChanged(this, new HotfileModifiedEventArgs(e.FullPath, cellsToRename));
+                //Change the hotfile we just stored to have the new file loaction
+                renamedHotfile.fileWatcher.Path = Path.GetDirectoryName(e.FullPath);
+                renamedHotfile.fileWatcher.Filter = Path.GetFileName(e.FullPath);
+
+                //Delete the old hotfile/add the new one
+                //hotfiles[oldPath].fileWatcher.Dispose();
+                hotfiles.Remove(e.OldFullPath);
+                hotfiles.Add(e.FullPath, renamedHotfile);
+
+                //Delete any cells that were assigned to the old hotfile and re-add them to the list with the new path
+                DataGridViewCell[] cellsToRename = cellsInHotfiles.Where(x => x.Value == e.OldFullPath).Select(x => x.Key).ToArray();
+                for (int i = 0; i < cellsToRename.Length; i++)
+                {
+                    cellsInHotfiles.Remove(cellsToRename[i]);
+                    cellsInHotfiles.Add(cellsToRename[i], e.FullPath);
+                }
+
+                HotfileDeleted(this, new HotfileDeletedEventArgs(e.OldFullPath));
+                HotfileChanged(this, new HotfileModifiedEventArgs(e.FullPath, cellsToRename));
+            }
         }
 
         /// <summary>
@@ -200,26 +253,29 @@ namespace GlitchHelper
         /// </summary>
         /// <param name="fsw">The FileSystemWatcher that is watching the hotfile.</param>
         /// <param name="cells">the cells to be replaced.</param>
+        int hcTryCount = 0;
         public void Hotfile_Changed(FileSystemWatcher fsw, DataGridViewCell[] cells)
         {
-            int trycount = 0;
+            
             try
             {
                 plugins.ElementAt(selectedPlugin).ReplaceSelectedWith(File.ReadAllBytes(Path.Combine(fsw.Path, fsw.Filter)), cells);
+                hcTryCount = 0;
             }
             //If we encounter an IOException, that just means that something is still holding up the replacement of the file, so try again. (Maximum of 10 trys; not sure if this is the best idea?)
             catch (IOException)
             {
-                if (trycount < 10)
+                if (hcTryCount < 10)
                 {
-                    trycount++;
+                    hcTryCount++;
                     Hotfile_Changed(fsw, cells);
                 }
                 else
                 {
                     MessageBox.Show("Replacement failed. :(", "ERROR");
-                    return;
+                    hcTryCount = 0;
                 }
+                return;
             }
             if (autoExport)
             {
@@ -261,18 +317,22 @@ namespace GlitchHelper
         /// Delete the given hotfile.
         /// </summary>
         /// <param name="hotfile">The path of the hotfile to delete</param>
-        public void Hotfile_Deleted(object o, FileSystemEventArgs e)
+        public void Hotfile_Deleted(object sender, FileSystemEventArgs e)
         {
-            //Dispose of the removed hotfile's FileSystemWatcher, then remove it from the hotfile list
-            hotfiles[e.FullPath].fileWatcher.Dispose();
-            hotfiles.Remove(e.FullPath);
+            if (!ignoreHotfileDeletions)
+            {
+                //Dispose of the removed hotfile's FileSystemWatcher, then remove it from the hotfile list
+                hotfiles[e.FullPath].fileWatcher.Dispose();
+                hotfiles.Remove(e.FullPath);
 
-            //Get all cells that are associated with said hotfile and remove each cell from the cellsInHotfiles dictionary
-            DataGridViewCell[] cellsToRemove = cellsInHotfiles.Where(x => x.Value == e.FullPath).Select(x => x.Key).ToArray();
-            for (int i = 0; i < cellsToRemove.Length; i++)
-                cellsInHotfiles.Remove(cellsToRemove[i]);
+                //TODO merge this and VVV
+                //Get all cells that are associated with said hotfile and remove each cell from the cellsInHotfiles dictionary
+                DataGridViewCell[] cellsToRemove = cellsInHotfiles.Where(x => x.Value == e.FullPath).Select(x => x.Key).ToArray();
+                for (int i = 0; i < cellsToRemove.Length; i++)
+                    cellsInHotfiles.Remove(cellsToRemove[i]);
 
-            HotfileDeleted(this, new HotfileDeletedEventArgs(e.FullPath));
+                HotfileDeleted(this, new HotfileDeletedEventArgs(e.FullPath));
+            }
         }
 
         /*
@@ -303,6 +363,7 @@ namespace GlitchHelper
         /// Creates a new hotfile out of the cells provided.
         /// </summary>
         /// <param name="hotfileCells">The cells to make a hotfile out of.</param>
+        /// <param name="hotfilePath">The path to create the hotile at.</param>
         public void NewHotfile(DataGridViewCell[] hotfileCells, string hotfilePath)
         {
             //Out of the selected cells, get the ones that are actually safe to make a hotfile out of
@@ -310,6 +371,9 @@ namespace GlitchHelper
             //If this returns null, the user has cancelled, so we stop
             if (sortedCells == null)
                 return;
+
+            //We trigger the event first to prevent the newly created hotfile from immedietly exporting.
+            HotfileChanged(this, new HotfileModifiedEventArgs(hotfilePath, sortedCells.ToArray()));
 
             //Write the actual hotfile and add to the hotfile list
             //File.WriteAllBytes(hotfilePath, plugins.ElementAt(selectedPlugin).ExportSelectedAsArray(sortedCells.ToArray()));
@@ -319,7 +383,7 @@ namespace GlitchHelper
             for (int i = 0; i < sortedCells.Length; i++)
                 cellsInHotfiles.Add(sortedCells[i], hotfilePath);
 
-            HotfileChanged(this, new HotfileModifiedEventArgs(hotfilePath, sortedCells.ToArray()));
+            //HotfileChanged(this, new HotfileModifiedEventArgs(hotfilePath, sortedCells.ToArray()));
         }
 
         /// <summary>
@@ -355,7 +419,7 @@ namespace GlitchHelper
             //HACK can probably be refactored(?)
 
             //store the hotfile that's going to be either edited or removed
-            string hotfileName = removedNode.Parent.Text ?? removedNode.Text;
+            string hotfileName = (removedNode.Parent != null) ? removedNode.Parent.Text : removedNode.Text;
 
             //If the user it trying to delete an entire hotfile, or is trying to delete the last part of a hotfile, remove the entire hotfile                        
             if (removedNode.Parent == null || removedNode.Parent.Nodes.Count == 1)
@@ -363,6 +427,15 @@ namespace GlitchHelper
                 //Dispose of the fileWatcher to prevent any extra event triggering
                 hotfiles[hotfileName].fileWatcher.Dispose();
                 hotfiles.Remove(hotfileName);
+
+                //TODO merge this and ^^^
+                //Get all cells that are associated with said hotfile and remove each cell from the cellsInHotfiles dictionary
+                DataGridViewCell[] cellsToRemove = cellsInHotfiles.Where(x => x.Value == hotfileName).Select(x => x.Key).ToArray();
+                for (int i = 0; i < cellsToRemove.Length; i++)
+                    cellsInHotfiles.Remove(cellsToRemove[i]);
+
+                if (deleteOrphanedHotfiles)
+                    File.Delete(hotfileName);
 
                 /*Remove the hotfile from the hotfileManager
                 if (removedNode.Parent != null)

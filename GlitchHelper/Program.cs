@@ -20,12 +20,11 @@ namespace GlitchHelper
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-
+            //TODO add support for a custom Plugins directory
+            //string[] args = Environment.GetCommandLineArgs();
+            
             DataHandler = new DataHandler();
             MainForm = new FormMain(DataHandler);
-
-            //DataHandler.FileLoaded += MainForm.FileLoaded;
-            //DataHandler.FileLoaded += HotfileManager.FileLoaded;
   
             Application.Run(MainForm);
         }

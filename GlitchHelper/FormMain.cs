@@ -18,14 +18,14 @@ namespace GlitchHelper
 {
     public partial class FormMain : Form
     {
-        //TODO get rid of the static property of this(?)
-        public static DataHandler dataHandler {get; set;}
+        public DataHandler dataHandler {get; set;}
         private HotfileManager hotfileManager { get; set; }
                 
         public FormMain(DataHandler dh)
         {
             dataHandler = dh;
             dataHandler.FileLoaded += FileLoaded;
+            dataHandler.FileUnloaded += FileUnloaded;
             dataHandler.HotfileDeleted += HotfileDeleted;
             dataHandler.HotfileChanged += HotfileChanged;
 
@@ -51,7 +51,7 @@ namespace GlitchHelper
 
             InitializeComponent();
         }
-                
+
         private static void toggleForm(Form form, bool state)
         {
             if (state)
@@ -72,7 +72,7 @@ namespace GlitchHelper
 
 
 
-        public static DataGridViewCell[] selectedCells;
+        public DataGridViewCell[] selectedCells;
 
         /// <summary>
         /// Contains the Default Tool Strip Menu Items
@@ -95,7 +95,7 @@ namespace GlitchHelper
         /// <summary>
         /// The ContextMenuStrip that's actually in use/will be modified at runtime.
         /// </summary>
-        private static ContextMenuStrip liveContextMenuStrip = new ContextMenuStrip();
+        private ContextMenuStrip liveContextMenuStrip = new ContextMenuStrip();
               
         private void openToolStripMenuItem_Click(object sender, EventArgs e)
         {
@@ -120,7 +120,7 @@ namespace GlitchHelper
             }
         }
 
-        public void FileLoaded(object o, EventArgs e)
+        private void FileLoaded(object o, EventArgs e)
         {
             //Disable all buttons dependant on a file being loaded
             this.saveToolStripMenuItem.Enabled = true;
@@ -128,25 +128,44 @@ namespace GlitchHelper
             this.editHeaderToolStripMenuItem.Enabled = true;
 
             //Remove any custom plugin options
-            this.pluginOptionsToolStripMenuItem.DropDown.Items.Clear();
+            //this.pluginOptionsToolStripMenuItem.DropDown.Items.Clear();
             this.pluginOptionsToolStripMenuItem.DropDown.Items.AddRange(dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).customMenuStripOptions);
 
             //Reset the LiveContextMenuStrip
-            liveContextMenuStrip.Items.Clear();
-            liveContextMenuStrip.Items.AddRange(defaultToolStripMenuItems);
+            //liveContextMenuStrip.Items.Clear();
+            //liveContextMenuStrip.Items.AddRange(defaultToolStripMenuItems);
             liveContextMenuStrip.Items.AddRange(dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).customContextMenuStripButtons);
             dataGridView1.ContextMenuStrip = liveContextMenuStrip;
 
             //Reset the datagridview
-            dataGridView1.Columns.Clear();
+            //dataGridView1.Columns.Clear();
             dataGridView1.Columns.AddRange(dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).columns);
-            dataGridView1.Rows.Clear();
+            //dataGridView1.Rows.Clear();
             dataGridView1.Rows.AddRange(dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).GetRows());
             
             //Set the title to be the opened file
             this.Text = dataHandler.openFileLocation;            
         }
-        
+
+        private void FileUnloaded(object sender, EventArgs e)
+        {
+            this.saveToolStripMenuItem.Enabled = false;
+            this.saveAsToolStripMenuItem.Enabled = false;
+            this.editHeaderToolStripMenuItem.Enabled = false;
+
+            //Remove any custom plugin options
+            this.pluginOptionsToolStripMenuItem.DropDown.Items.Clear();
+
+            //Reset the LiveContextMenuStrip
+            liveContextMenuStrip.Items.Clear();
+            liveContextMenuStrip.Items.AddRange(defaultToolStripMenuItems);
+
+            dataGridView1.Columns.Clear();
+            dataGridView1.Rows.Clear();
+
+            this.Text = "Glitch Helper";
+        }
+
         //HACK unsure if either of these should be here, or if they should be in DataHandler
         #region Export/Replace Stuff
 
@@ -160,7 +179,7 @@ namespace GlitchHelper
             {
                 SaveFileDialog sfd = new SaveFileDialog()
                 {
-                    Filter = "Text Files (*.txt;)|*.txt|All Files (*.*)|*.*",
+                    Filter = "Text Files (*.txt;)|*.txt|Raw Files (*.raw;)|*.raw|All Files (*.*)|*.*",
                     AddExtension = true
                 };
                 //If the user selected something, write the bytes from the ExportSelectedAsArray command from the loaded plugin
@@ -179,7 +198,7 @@ namespace GlitchHelper
             {
                 OpenFileDialog ofd = new OpenFileDialog()
                 {
-                    Filter = "Text Files (*.txt;)|*.txt|All Files (*.*)|*.*"
+                    Filter = "Text Files (*.txt;)|*.txt|Raw Files (*.raw;)|*.raw|All Files (*.*)|*.*",
                 };
                 //If the user selected something, use the replace command from the loaded plugin
                 if (ofd.ShowDialog() == DialogResult.OK)
@@ -198,7 +217,7 @@ namespace GlitchHelper
         /// <param name="e"></param>
         private void saveToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            if(dataHandler.savedFileLocation != null)
+            if(dataHandler.saveableFileType != null)
             {
                 //If we have yet to save the file anywhere, we're going to need to ask for it
                 if (dataHandler.savedFileLocation == null)
@@ -222,7 +241,7 @@ namespace GlitchHelper
         /// <param name="e"></param>
         private void saveAsToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            if (dataHandler.savedFileLocation != null)
+            if (dataHandler.saveableFileType != null)
             {
                 string newLocation = getSavedFileLocation();
                 //If that returned null, that means the user canceled, so we stop
@@ -276,7 +295,7 @@ namespace GlitchHelper
 
                 SaveFileDialog sfd = new SaveFileDialog()
                 {
-                    Filter = "Text Files (*.txt;)|*.txt|All Files (*.*)|*.*",
+                    Filter = "Text Files (*.txt;)|*.txt|Raw Files (*.raw;)|*.raw|All Files (*.*)|*.*",
                     AddExtension = true,
                     Title = "Pick a destination hotfile."
                 };
@@ -304,7 +323,7 @@ namespace GlitchHelper
             if (sfd.ShowDialog() == DialogResult.OK && sfd.FileName != dataHandler.hotfileExportFile)
             {
                 dataHandler.iterateCount = 1;
-                dataHandler.hotfileIterationExportFile = dataHandler.hotfileExportFile = sfd.FileName;
+                dataHandler.hotfileIterationExportFile = dataHandler.hotfileExportFile = hotfileManager.Text = sfd.FileName;
             }
         }
 
@@ -569,12 +588,13 @@ namespace GlitchHelper
         private void dataGridView1_CellEndEdit(object sender, DataGridViewCellEventArgs e)
         {
             dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).CellEndEdit(dataGridView1[e.ColumnIndex, e.RowIndex]);
-            dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).UpdateRows(dataGridView1.Rows[e.RowIndex]);
+            //dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).UpdateRows(dataGridView1.Rows[e.RowIndex]);
         }
 
         private void dataGridView1_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
         {
-            dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).CellFormating(e);
+            if(dataHandler.selectedPlugin < dataHandler.plugins.Count)
+                dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).CellFormating(e);
         }
         
         #region Drag and Drop code
@@ -659,12 +679,31 @@ namespace GlitchHelper
         //TODO stop sending each plugin a copy of the selected cells
         private void dataGridView1_SelectionChanged(object sender, EventArgs e)
         {
-            selectedCells = dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).selectedCells = dataGridView1.SelectedCells.Cast<DataGridViewCell>().OrderBy(c => c.ColumnIndex).OrderBy(c => c.RowIndex).ToArray();
+            if(dataHandler.selectedPlugin < dataHandler.plugins.Count)
+                selectedCells = dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).selectedCells = dataGridView1.SelectedCells.Cast<DataGridViewCell>().OrderBy(c => c.ColumnIndex).OrderBy(c => c.RowIndex).ToArray();
             //plugins.ElementAt(selectedPlugin).selectedCells = selectedCells;
             
 
             //plugins.ElementAt(selectedPlugin).selectedCells = dataGridView1.SelectedCells.Cast<DataGridViewCell>().OrderBy(c => c.ColumnIndex).OrderBy(c => c.RowIndex).ToArray();
             //cellsSelected = (dataGridView1.SelectedCells.Count > 0) ? true : false;
+        }
+
+        private void FormMain_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            //TODO might be unnecesary?
+            dataHandler.Unload();
+        }
+
+        private void dataGridView1_UserAddedRow(object sender, DataGridViewRowEventArgs e)
+        {
+            if (dataHandler.selectedPlugin < dataHandler.plugins.Count)
+                dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).UserAddedRow(e);
+        }
+
+        private void dataGridView1_UserDeletingRow(object sender, DataGridViewRowCancelEventArgs e)
+        {
+            if (dataHandler.selectedPlugin < dataHandler.plugins.Count)
+                dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).UserDeletingRow(e);
         }
     }
 }

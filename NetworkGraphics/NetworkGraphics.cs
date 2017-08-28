@@ -350,6 +350,8 @@ namespace NetworkGraphics
                 DialogResult warningDR = MessageBox.Show("The selected file's header does not match with any Network Graphics header (png, mng, or jng.\nWould you like to open the file anyways?", "Warning", MessageBoxButtons.YesNo);
                 if (warningDR != DialogResult.Yes)
                     return null;
+                else
+                    returnFilter = "Portable Network Graphics (*.png)|*.png";
             }
             openedFile = new NetworkGraphic(selectedBytes);
             return returnFilter;
@@ -867,23 +869,19 @@ namespace NetworkGraphics
 
         public void ReplaceSelectedWith(byte[] replacementBytes, DataGridViewCell[] cells = null)
         {
-            cells = (cells != null) ? cells.OrderBy(c => c.ColumnIndex).OrderBy(c => c.RowIndex).ToArray() : selectedCells;
-
             /*
             if (cells == null)
                 cells = selectedCells;
             else
-                cells = cells.OrderBy(c => c.ColumnIndex).OrderBy(c => c.RowIndex).ToArray();
+              cells = cells.OrderBy(c => c.ColumnIndex).OrderBy(c => c.RowIndex).ToArray();
             */
+            cells = (cells != null) ? cells.OrderBy(c => c.ColumnIndex).OrderBy(r => r.RowIndex).ToArray() : selectedCells;
 
-            //byte[] replacementBytes = File.ReadAllBytes(ofd.FileName);
-
-            //var orderedCells = cells.Cast<DataGridViewCell>().OrderBy(c => c.ColumnIndex).OrderBy(c => c.RowIndex).ToArray();
-
-            if (cells.Any(x => x.RowIndex >= openedFile.data.Count))
+            #region Valid cell finder
+            int badCells = cells.Where(x => x.RowIndex >= openedFile.data.Count).Count();
+            if (badCells > 0)
             {
                 //TODO replace all MessageBox.show stuff here (maybe use exceptions?)
-                int badCells = cells.Where(x => x.RowIndex >= openedFile.data.Count).Count();
                 if (badCells == cells.Length)
                 {
                     MessageBox.Show("The cells you have selected to replace are not valid for replacing.", "Error");
@@ -897,6 +895,10 @@ namespace NetworkGraphics
                         cells = cells.Where(x => x.RowIndex < openedFile.data.Count).ToArray();
                 }
             }
+            #endregion
+
+            #region Length of replacement finder
+
             long lengthOfReplacementBytes = replacementBytes.Length;
             
             long lengthOfcells = 0;
@@ -919,26 +921,11 @@ namespace NetworkGraphics
                         break;
                 }
             }
+            #endregion
 
+            #region Proportional cell replacer (only for data chunks)
             if (cells.All(x => x.ColumnIndex == 2))
             {
-                /*
-                DialogResult dl = MessageBox.Show("Wanna try something new? ;3", "Hey.", MessageBoxButtons.YesNo);
-                if (dl != DialogResult.Yes)
-                    return;
-                */
-                if (MessageBox.Show("Wanna try something new? ;3", "Hey.", MessageBoxButtons.YesNo) != DialogResult.Yes)
-                    return;
-
-
-                /*
-                List<decimal> cellPercentages = new List<decimal>();
-
-                for (int i = 0; i < cells.Length; i++)
-                {
-                    cellPercentages.Add(openedFile.data[cells[i].RowIndex].data.Length / lengthOfcells);
-                }*/
-
                 for (int i = 0; i < cells.Length; i++)
                 {
                     /* Explanation of that one line down below
@@ -962,6 +949,8 @@ namespace NetworkGraphics
                     replacementBytes = replacementBytes.Skip(openedFile.data[cells[i].RowIndex].data.Length).ToArray();
                 }
             }
+            #endregion
+            #region Non-proportional cell replacer (for mixed cell types)
             else
             {
                 if (replacementBytes.Length != lengthOfcells)
@@ -979,8 +968,6 @@ namespace NetworkGraphics
                     }
                 }
 
-
-                // Another old thing
                 for (int i = 0; i < cells.Length; i++)
                 {
                     switch (cells[i].ColumnIndex)
@@ -1008,9 +995,12 @@ namespace NetworkGraphics
                     }
                 }                
             }
+            #endregion
 
+            #region CRC calculater
             if (autoCalculateCRC)
             {
+                //TODO figure out which on of these is faster
                 /*
                 List<int> chunksToReCalculate = new List<int>();
                 for (int i = 0; i < cells.Length; i++)
@@ -1021,37 +1011,7 @@ namespace NetworkGraphics
 
                 ReCalculateCRCOfChunk(chunksToReCalculate.ToArray());
             }
-
-            /*
-            for (int i = 0; i < cells.Length; i++)
-            {
-                switch (cells[i].ColumnIndex)
-                {
-                    case (0):
-                        openedFile.data[cells[i].RowIndex].length = BitConverter.ToInt32(replacementBytes.Take(4).Reverse().ToArray(), 0);
-                        cells[i].Value = openedFile.data[cells[i].RowIndex].length;
-                        replacementBytes = replacementBytes.Skip(4).ToArray();
-                        break;
-                    case (1):
-                        openedFile.data[cells[i].RowIndex].type = replacementBytes.Take(4).ToArray();
-                        cells[i].Value = Encoding.ASCII.GetString(openedFile.data[cells[i].RowIndex].type);
-                        replacementBytes = replacementBytes.Skip(4).ToArray();
-                        break;
-                    case (2):
-                        openedFile.data[cells[i].RowIndex].data = replacementBytes.Take((int)((openedFile.data[cells[i].RowIndex].data.Length / lengthOfcells)*lengthOfReplacementBytes)).ToArray();
-                        cells[i].Value = $"<{openedFile.data[cells[i].RowIndex].data.Length}> bytes long";
-                        replacementBytes = replacementBytes.Skip(openedFile.data[cells[i].RowIndex].data.Length).ToArray();
-                        break;
-                    case (3):
-                        openedFile.data[cells[i].RowIndex].crc = replacementBytes.Take(4).ToArray();
-                        cells[i].Value = BitConverter.ToString(openedFile.data[cells[i].RowIndex].crc).Replace("-", ", ");
-                        replacementBytes = replacementBytes.Skip(4).ToArray();
-                        break;
-                }
-            }
-            */
-
-
+            #endregion
         }
 
         #region CRC Stuff
@@ -1200,13 +1160,8 @@ namespace NetworkGraphics
         /// <param name="editedCell">The cell that has just been edited.</param>
         public void CellEndEdit(DataGridViewCell editedCell)
         {
-            //If there's no chunk assosiated with the edited cell, add a new chunk (will default to IEND)
-            //TODO change while to if(?)
-            while(editedCell.RowIndex > openedFile.data.Count)
-                openedFile.data.Add(new chunk());
-
             //If the edited cell's value is not null, set the chunk's data to be equal to it
-            if (editedCell.Value != null)
+            if (editedCell.Value != null && editedCell.Value.ToString() != null) //TODO might not need the ToString variant...
             {
                 switch (editedCell.ColumnIndex)
                 {
@@ -1237,6 +1192,7 @@ namespace NetworkGraphics
                                 break;
                             //If not, se the crcto be the one the user entered
                             case (false):
+                                //HACK probably slow & has other flaws...
                                 //Remove the seperator from the crc (might not be the best way of doing things...)
                                 string hexValues = editedCell.Value.ToString().Replace(@", ", null);
                                 //Set the crc using code from here: https://stackoverflow.com/questions/321370/how-can-i-convert-a-hex-string-to-a-byte-array
@@ -1404,6 +1360,16 @@ namespace NetworkGraphics
             #endregion
         }
 
+        public void UserAddedRow(DataGridViewRowEventArgs e)
+        {
+            openedFile.data.Add(new chunk());
+        }
+
+        public void UserDeletingRow(DataGridViewRowCancelEventArgs e)
+        {
+            openedFile.data.RemoveAt(e.Row.Index);
+        }
+
         public void MoveChunk(int rowIndexFromMouseDown, int rowIndexOfItemUnderMouseToDrop)
         {
             var chunktoMove = openedFile.data[rowIndexFromMouseDown];
@@ -1478,6 +1444,7 @@ namespace NetworkGraphics
                         e.CellStyle.BackColor = (!Enumerable.SequenceEqual(crc, openedFile.data[e.RowIndex].crc)) ? Color.Red : Color.White;
                         */
 
+                        //TODO attempt to refactor this
                         if (!Enumerable.SequenceEqual(crc, openedFile.data[e.RowIndex].crc))
                         {
                             if (autoCalculateCRC)
@@ -1498,50 +1465,7 @@ namespace NetworkGraphics
                 }
             }
         }
-        /*
-        public void RowsAdded(DataGridViewRowsAddedEventArgs e)
-        {
-            if (e.RowIndex > openedFile.data.Count)
-            {
-                openedFile.data.Add(
-                    new chunk(
-                        0,
-                        Encoding.ASCII.GetBytes("IEND"),
-                        new byte[0],
-                        new byte[] { 174, 66, 96, 130 })
-                        );
-            }
-        }
-        */
-        /*
-        public void DisplayHotfilesInManager(TreeView tv, Dictionary<string, DataGridViewCell[]> hotfiles)
-        {
-            foreach(var entry in hotfiles)
-            {
-                tv.Nodes.Add(entry.Key, entry.Key);
-                for (int _i = 0; _i < entry.Value.Length; _i++)
-                {
-                    string nodeName = "Chunk " + entry.Value[_i].RowIndex + 1;
-                    switch (entry.Value[_i].ColumnIndex)
-                    {
-                        case (0):
-                            nodeName += " Length";
-                            break;
-                        case (1):
-                            nodeName += " Type";
-                            break;
-                        case (2):
-                            nodeName += " Data";
-                            break;
-                        case (3):
-                            nodeName += " CRC";
-                            break;
-                    }
-                    tv.Nodes[entry.Key].Nodes.Add(nodeName, nodeName);
-                }
-            }
-        }
-        */
+
         public TreeNode GetHotfileInfo(DataGridViewCell cell)
         {
             string nodeName = "Chunk " + (cell.RowIndex + 1);

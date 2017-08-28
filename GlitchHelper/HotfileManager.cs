@@ -17,12 +17,13 @@ namespace GlitchHelper
     public partial class HotfileManager : Form
     {
         private DataHandler dataHandler { get; set; }
-        private static FormMain mainForm { get; set; }
+        private FormMain mainForm { get; set; }
 
         public HotfileManager(DataHandler dh, FormMain fm)
         {
             dataHandler = dh;
             dataHandler.FileLoaded += FileLoaded;
+            dataHandler.FileUnloaded += FileUnloaded;
             dataHandler.HotfileChanged += HotfileChanged;
             dataHandler.HotfileDeleted += HotfileDeleted;
             
@@ -88,6 +89,23 @@ namespace GlitchHelper
             Text = dataHandler.hotfileExportFile ?? "Hotfile Manager";
         }
 
+        //TODO clean up the UI, spesifically with these three buttons:
+
+        private void deleteOrphanedEmptyHotfilesToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            dataHandler.deleteOrphanedHotfiles = deleteEmptyHotfilesToolStripMenuItem.Checked;
+        }
+
+        private void ignoreHotfileRenamingToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            dataHandler.ignoreHotfileRenaming = ignoreHotfileRenamingToolStripMenuItem.Checked;
+        }
+
+        private void ignoreHotfileDeletionsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            dataHandler.ignoreHotfileDeletions = ignoreHotfileDeletionsToolStripMenuItem.Checked;
+        }
+
         private void treeView1_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Delete)
@@ -113,13 +131,26 @@ namespace GlitchHelper
 
         public void FileLoaded(object o, EventArgs e)
         {
-            this.Text = "Hotfile Manager";
+            //this.Text = "Hotfile Manager";
 
             this.setOutputFileToolStripMenuItem.Enabled = true;
             this.autoExportModeToolStripMenuItem.Enabled = true;
             this.autoExportToolStripMenuItem.Enabled = true;
             this.overwriteToolStripMenuItem.Enabled = true;
             this.iterateToolStripMenuItem.Enabled = true;
+        }
+
+        private void FileUnloaded(object o, EventArgs e)
+        {
+            this.Text = "Hotfile Manager";
+
+            this.setOutputFileToolStripMenuItem.Enabled = false;
+            this.autoExportModeToolStripMenuItem.Enabled = false;
+            this.autoExportToolStripMenuItem.Enabled = false;
+            this.overwriteToolStripMenuItem.Enabled = false;
+            this.iterateToolStripMenuItem.Enabled = false;
+
+            treeView1.Nodes.Clear();
         }
     }
 }

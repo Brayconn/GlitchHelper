@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PluginBase", "PluginBase\Pl
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NetworkGraphics", "NetworkGraphics\NetworkGraphics.csproj", "{712A53F3-C5C2-4357-A0A9-17C522453B29}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ISOBaseMediaFormat", "ISOBaseMediaFormat\ISOBaseMediaFormat.csproj", "{147F0803-0DB9-43F2-AED6-0910E8AACC8A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,10 @@ Global
 		{712A53F3-C5C2-4357-A0A9-17C522453B29}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{712A53F3-C5C2-4357-A0A9-17C522453B29}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{712A53F3-C5C2-4357-A0A9-17C522453B29}.Release|Any CPU.Build.0 = Release|Any CPU
+		{147F0803-0DB9-43F2-AED6-0910E8AACC8A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{147F0803-0DB9-43F2-AED6-0910E8AACC8A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{147F0803-0DB9-43F2-AED6-0910E8AACC8A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{147F0803-0DB9-43F2-AED6-0910E8AACC8A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -65,17 +65,17 @@ namespace GlitchHelper
         public DataHandler(string pluginPath = null)
         {
             if (pluginPath == null)
-                pluginPath = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().CodeBase), @"Plugins");
+                pluginPath = Path.Combine(Path.GetDirectoryName(AppDomain.CurrentDomain.BaseDirectory), @"Plugins");
             else
                 pluginPath = Path.GetDirectoryName(pluginPath);
 
             //Plugin loading stuff
             plugins = PluginLoader<IGHPlugin>.LoadPlugins(pluginPath);
 
-            if (plugins.Count <= 0 || plugins == null)
+            if (plugins == null || plugins.Count <= 0 )
             {
                 MessageBox.Show("No Plugins Found. ;(\nRemember, Plugins (by default) belong in a folder called \"Plugins\", placed in the same directory as the program itself.");
-                Application.Exit();
+                return;
             }
             else
             {
@@ -137,7 +137,7 @@ namespace GlitchHelper
             {
                 string hn = hotfiles.ElementAt(i).Key;
                 hotfiles.ElementAt(i).Value.fileWatcher.Dispose(); //HACK Unsure if I have to do this...?
-                if (deleteOrphanedHotfiles)
+                if (deleteOrphanedHotfiles) //TODO fix System.IO errors
                     File.Delete(hn);
                 HotfileDeleted(this, new HotfileDeletedEventArgs(hn));
             }

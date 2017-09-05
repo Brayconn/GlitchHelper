@@ -104,6 +104,13 @@ namespace NetworkGraphics
         }
 
         #region Default Headers
+        private static readonly Dictionary<byte[], string> saveableFileTypes = new Dictionary<byte[], string>()
+        {
+            { new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }, "Portable Network Graphics (*.png)|*.png"},
+            { new byte[] { 0x8A, 0x4D, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }, "Multiple Network Graphics (*.mng)|*.mng" },
+            { new byte[] { 0x8B, 0x4A, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }, "JPEG Network Graphics (*.jng)|*.jng"}
+        };
+
         private static readonly byte[] pngHeader = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
         private static readonly byte[] mngHeader = { 0x8A, 0x4D, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
         private static readonly byte[] jngHeader = { 0x8B, 0x4A, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
@@ -336,10 +343,11 @@ namespace NetworkGraphics
         /// <returns>Filter for use with saving the final file</returns>
         public string Load(byte[] selectedBytes)
         {
-            string returnFilter = "";
+            //string returnFilter = "";
 
             //Try and find out what kind of Network Graphic we're opening
-            if(Enumerable.SequenceEqual(selectedBytes.Take(8), pngHeader))
+            /*
+            if (Enumerable.SequenceEqual(selectedBytes.Take(8), pngHeader))
                 returnFilter = "Portable Network Graphics (*.png)|*.png";
             else if (Enumerable.SequenceEqual(selectedBytes.Take(8), mngHeader))
                 returnFilter = "Multiple Network Graphics (*.mng)|*.mng";
@@ -353,8 +361,20 @@ namespace NetworkGraphics
                 else
                     returnFilter = "Portable Network Graphics (*.png)|*.png";
             }
+            */
+            string[] returnFilter = saveableFileTypes.Where(x => x.Key.SequenceEqual(selectedBytes.Take(8))).Select(x => x.Value).ToArray();
+
+            if(returnFilter == null || returnFilter.Length != 1)
+            {
+                DialogResult warningDR = MessageBox.Show("The selected file's header does not match with any Network Graphics header (png, mng, or jng.\nWould you like to open the file anyways?", "Warning", MessageBoxButtons.YesNo);
+                if (warningDR != DialogResult.Yes)
+                    return null;
+                else
+                    returnFilter[0] = "Portable Network Graphics (*.png)|*.png";
+            }
+
             openedFile = new NetworkGraphic(selectedBytes);
-            return returnFilter;
+            return returnFilter[0];
         }
 
         /*

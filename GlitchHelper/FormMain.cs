@@ -184,7 +184,7 @@ namespace GlitchHelper
                 };
                 //If the user selected something, write the bytes from the ExportSelectedAsArray command from the loaded plugin
                 if (sfd.ShowDialog() == DialogResult.OK)
-                    File.WriteAllBytes(sfd.FileName, dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).ExportSelectedAsArray());
+                    File.WriteAllBytes(sfd.FileName, dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).ExportSelectedAsArray(selectedCells));
             }
         }
 

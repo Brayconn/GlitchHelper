@@ -1,116 +1,199 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace PluginBase
-{
+{  
+    public class Reference
+    {
+        /// <summary>
+        /// The text that gets displayed
+        /// </summary>
+        public string text { get; set; }
+
+        /// <summary>
+        /// The file where the data can be located
+        /// </summary>
+        public string file { get; set; }
+
+        /// <summary>
+        /// The offset of the data from the start of the file
+        /// </summary>
+        public long offset { get; set; }
+        
+        /// <summary>
+        /// The length of the data
+        /// </summary>
+        public int length { get; set; }
+                
+        public enum LengthType
+        {
+            invariable,
+            variable
+        }
+        /// <summary>
+        /// Whether the length of the refrence can change
+        /// </summary>
+        public LengthType lengthType { get; }
+
+        /// <summary>
+        /// Whether or not the reference can be DIRECTLY edited (if not, it must be exported/replaced)
+        /// </summary>
+        public bool editable { get; }
+        
+        public bool exportable { get; }
+
+        public enum ReferenceValidity
+        {
+            valid,
+            unknown,
+            invalid
+        }
+        /// <summary>
+        /// Whether or not the reference is valid
+        /// </summary>
+        public ReferenceValidity validity { get; set; }      
+
+        public Reference(string text, string file, long offset, int length, LengthType lengthType, bool editable, bool exportable = true, ReferenceValidity validity = ReferenceValidity.unknown)
+        {
+            this.text = text;
+            this.file = file;
+            this.offset = offset;
+            this.length = length;
+            this.lengthType = lengthType;
+            this.editable = editable;
+            this.exportable = exportable;
+            this.validity = validity;
+        }
+    }
+
+    unsafe public class Option
+    {
+        /// <summary>
+        /// The name of the Option
+        /// </summary>
+        public string name { get; }
+
+        public Type type { get; }
+        /// <summary>
+        /// The value to change
+        /// </summary>
+        public void* value { get; } //UNSURE this works fine but... pointers in C# man... I get the idea that's not right.
+
+        private Option(string name)
+        {
+            this.name = name;
+        }
+        public Option(string name, void* value, Type type) : this(name)
+        {
+            this.value = value;
+            this.type = type;
+        }
+        public Option(string name, bool* value) : this(name,value,typeof(bool)) { }
+        public Option(string name, int* value) : this(name, value, typeof(int)) { }
+
+
+    }
+
+    public class DisplayInformationEventArgs : EventArgs
+    {
+        public string text { get; }
+        public string header { get; }
+
+        public DisplayInformationEventArgs(string text, string header)
+        {
+            this.text = text;
+            this.header = header;
+        }
+    }
+
+    public class AskToContinueEventArgs : DisplayInformationEventArgs
+    {
+        public bool result { get; set; }
+
+        public AskToContinueEventArgs(string text, string header, bool result = false) : base(text, header)
+        {
+            this.result = result;
+        }
+    }
+
     public interface IGHPlugin
     {
+        event EventHandler<AskToContinueEventArgs> AskToContinue;
+        event EventHandler<DisplayInformationEventArgs> DisplayInformation;
+
         /// <summary>
         /// Filter meant for OpenFileDialog.Filter
         /// </summary>
-        string filter { get; }
-
-        DataGridViewCell[] selectedCells { get; set; }
-        DataGridViewColumn[] columns { get; }
-
-
-        ToolStripItem[] customMenuStripOptions { get; }
-        ToolStripItem[] customContextMenuStripButtons { get; }
+        string ofdFilter { get; }
+        /// <summary>
+        /// Filter meant for SaveFileDialog.Filter
+        /// </summary>
+        string sfdFilter { get; }
 
         /// <summary>
-        /// Array containing all custom ToolStripItems the plugin wants to add to the DataGridView's Context Menu Strip
+        /// The default reference[] to be added if the user decides to add new row
         /// </summary>
-        //ToolStripItem[] contextMenuStripItems { get; }
+        Reference[] defaultReference { get; }
 
         /// <summary>
-        /// Array containing all custom ToolStripItems the plugin wants to add to the DataGridView's Menu Strip
+        /// The names of each column
         /// </summary>
-        //ToolStripItem[] menuStripItems { get; }
+        string[] columnNames { get; }
+
+        /// <summary>
+        /// Array containing any custom options a plugin may have
+        /// </summary>
+        Option[] customOptions { get; }
+
+        /// <summary>
+        /// Checks if the given FileStream is valid for opening
+        /// </summary>
+        /// <param name="stream">The stream of the file to check</param>
+        /// <returns>Whether or not the file is valid</returns>
+        bool IsFileValid(FileStream stream);
 
         /// <summary>
         /// Loads the given bytes into a useable/sorted format
         /// </summary>
         /// <param name="selectedBytes">The bytes of the file to load</param>
         /// <returns>Filter meant for telling the program what file the user is allowed to save.</returns>
-        string Load(byte[] selectedBytes);
+        Tuple<Reference,List<Reference[]>> Load(FileStream stream);
+
+        //HACK don't like the fact I'm now having to include the default file everywhere, all because plugins need it if they need to replace any data during validation time...
+        /// <summary>
+        /// Updates the "validity" property of the provided references
+        /// </summary>
+        /// <param name="references">The references to update</param>
+        /// <param name="defaultFile">The opened file</param>
+        void UpdateReferenceValidity(Reference[] references, string defaultFile);
+
+        //Reference[] GetHeaderChunks(Reference[] references);
 
         /// <summary>
-        /// Displays the loaded file's contents onto a given DataGridView
+        /// Convert an object into a byte[] useable for replacement
         /// </summary>
-        /// <param name="dgv">The DataGridView to display to.</param>
-        DataGridViewRow[] GetRows();
-
-        void UpdateRows(DataGridViewRow row);
-        void UpdateRows(DataGridViewRow[] rows);
+        /// <param name="column">The column the input was entered in</param>
+        /// <param name="input">The object itself</param>
+        /// <returns>Formatted byte[]</returns>
+        byte[] FormatReplacementInput(int column, object input);
 
         /// <summary>
-        /// Exports the entire file.
+        /// Get the name of the references provided. (Meant for Hotfile displays)
         /// </summary>
-        /// <returns>The entire file.</returns>
-        byte[] ExportAll();
-
-        //-----------------------------------------------------------\\
-
+        /// <param name="input">The references to get the names of</param>
+        /// <returns>The names of the provided references</returns>
+        string[] GetHotfileInfo(Tuple<int, int>[] input);
         /// <summary>
-        /// Return the bytes corresponding to the given DataGridViewCells as a List of byte[]
+        /// Get the name of the reference provided. (Meant for Hotfile displays)
         /// </summary>
-        /// <param name="cells">The cells to get the data of</param>
-        /// <returns>The data of the given cells</returns>
-        List<byte[]> ExportSelectedAsList(DataGridViewCell[] cells = null);
-
-        /// <summary>
-        /// Return the bytes corresponding to the given DataGridViewCells as a byte[]
-        /// </summary>
-        /// <param name="cells">The cells to get the data of</param>
-        /// <returns>The data of the given cells</returns>
-        byte[] ExportSelectedAsArray(DataGridViewCell[] cells = null);
-
-        /// <summary>
-        /// Replace the data of the given cells with the given data
-        /// </summary>
-        /// <param name="selectedCells">The cells whose data will be replaced</param>
-        /// <param name="replacementBytes">The data to be used as a replacement</param>
-        void ReplaceSelectedWith(byte[] replacementBytes, DataGridViewCell[] cells = null);
-
-        /// <summary>
-        /// Updates the given cells data
-        /// </summary>
-        /// <param name="editedCell">The cell whose data needs updating</param>
-        void CellEndEdit(DataGridViewCell editedCell);
-
-        void UserAddedRow(DataGridViewRowEventArgs e);
-
-        void UserDeletingRow(DataGridViewRowCancelEventArgs e);
-
-        /// <summary>
-        /// Moves a given chunk to another place
-        /// </summary>
-        /// <param name="rowIndexFromMouseDown">Row of chunk to move</param>
-        /// <param name="rowIndexOfItemUnderMouseToDrop">Row of chunk to displace</param>
-        void MoveChunk(int rowIndexFromMouseDown, int rowIndexOfItemUnderMouseToDrop);
-
-        /// <summary>
-        /// Formats the given cell
-        /// </summary>
-        /// <param name="e">The cell to format</param>
-        void CellFormating(DataGridViewCellFormattingEventArgs e);
-
-        //Was a good idea, since it forced plugin makers to have a function that added a new chunk/row/whatever, but it really just didn't pan out.
-        //void RowsAdded(DataGridViewRowsAddedEventArgs e);
-        /*
-        /// <summary>
-        /// ...Pretty self explanitory... Displays the given hotfiles into the given TreeView.
-        /// </summary>
-        /// <param name="tv">The TreeView to populate.</param>
-        /// <param name="hotfiles">The hotfiles to add.</param>
-        void DisplayHotfilesInManager(TreeView tv, Dictionary<string, DataGridViewCell[]> hotfiles);
-        */
-        TreeNode GetHotfileInfo(DataGridViewCell cell);
-        TreeNode[] GetHotfileInfo(DataGridViewCell[] cells);
+        /// <param name="input">The reference to get the name of</param>
+        /// <returns>The name of the provided reference</returns>
+        string GetHotfileInfo(Tuple<int, int> input);
     }
 }

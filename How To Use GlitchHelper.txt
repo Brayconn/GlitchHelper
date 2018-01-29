@@ -1,0 +1,28 @@
+What is GlitchHelper?!
+GlitchHelper is a program that aims to let you databend filetypes other than the bog standard Bitmap/Raw Data files.
+
+How do I use it?!
+there are two main ways to use GlitchHelper.
+1. Do everything manually
+2. Use Hotfiles
+
+For both ways, you need to:
+1. Open the file you want to glitch.
+2. Select the parts of the file you want to glitch (For Network Graphic files, this is usually the data portion of "IDAT" chunks, and for ISO Base Media Format files, this is usually the data portion of "mdat" chunks).
+
+Then, for the manual approach, you need to:
+1. Click "Export Selected..." and save the file somewhere.
+2. Open the file you just created with your favorite editor (Notepad++ for .txt, and Audacity for .raw are my go to programs).
+3. Make some changes! Can be something as small as changing one byte, or as big as replacing the entire file (Your mileage may vary)
+4. Go back to GlitchHelper, and click "Replace Selected..." on the data you previously exported.
+5. Select a file to replace the selected data with (This can be any file, but in this case you'd probably want to pick the one we just edited)
+6. Hit "Save" or "Save as..." to save your new glitched file!
+
+Meanwhile for the Hotfile approach, you need to:
+1. Click "Create Hotfile..."
+2. Choose an output file (this will be where the glitched file is saved to)
+3. Choose an export file (this will be the file all the data resides in, and the one you want to be editing)
+4. Open the export file and make some changes!
+5. As soon as you hit save in your editor of choice, the glitched file will automatically be saved to the file we picked earlier
+
+NOTE: If you're using Audacity as your editor of choice, you will need to turn on "Ignore Hotfile Deletions" and "Ignore Hotfile Renaming", which can be found in the Hotfile Manager (view -> Hotfile Manager).

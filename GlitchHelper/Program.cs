@@ -8,9 +8,9 @@ namespace GlitchHelper
 {
     static class Program
     {
-        public static DataHandler DataHandler { get; set; }
+        //public static DataHandler DataHandler { get; set; }
         public static FormMain MainForm { get; set; }
-        public static HotfileManager HotfileManager { get; set; }
+        //public static HotfileManager HotfileManager { get; set; }
 
         /// <summary>
         /// The main entry point for the application.
@@ -21,10 +21,10 @@ namespace GlitchHelper
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             //TODO add support for a custom Plugins directory
-            //string[] args = Environment.GetCommandLineArgs();
-            
-            DataHandler = new DataHandler();
-            MainForm = new FormMain(DataHandler);
+            string[] args = Environment.GetCommandLineArgs();
+
+            //DataHandler = new DataHandler();
+            MainForm = new FormMain(args.Length >= 2 ? args[1] : null);
   
             Application.Run(MainForm);
         }

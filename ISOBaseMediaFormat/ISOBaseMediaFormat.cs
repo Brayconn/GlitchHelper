@@ -3,61 +3,61 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using PluginBase;
-using System.Windows.Forms;
 using System.Drawing;
 using System.Data;
 using System.Text.RegularExpressions;
+using System.IO;
 
-//TODO rename/reorganize this
+//TODO reorganize this?
 namespace ISOBaseMediaFormat
 {
     public class ISOBaseMediaFormat : IGHPlugin
     {
-        public DataGridViewColumn[] columns
+        public event EventHandler<AskToContinueEventArgs> AskToContinue = new EventHandler<AskToContinueEventArgs>((o, e) => { });
+        public event EventHandler<DisplayInformationEventArgs> DisplayInformation = new EventHandler<DisplayInformationEventArgs>((o, e) => { });
+
+        public string[] columnNames
         {
             get
             {
-                return new DataGridViewColumn[]
+                return new string[]
                 {
-                new DataGridViewTextBoxColumn()
-                {
-                    Name = "length",
-                    HeaderText = "Length",
-                    SortMode = DataGridViewColumnSortMode.NotSortable,
-                    ValueType = typeof(int)
-                },
-                new DataGridViewTextBoxColumn()
-                {
-                    Name = "type",
-                    HeaderText = "Type",
-                    SortMode = DataGridViewColumnSortMode.NotSortable,
-                    ValueType = typeof(string)
-                },
-                new DataGridViewTextBoxColumn()
-                {
-                    Name = "data",
-                    HeaderText = "Data",
-                    SortMode = DataGridViewColumnSortMode.NotSortable,
-                    ValueType = typeof(string),
-                    ReadOnly = true
-                },
+                    "Length",
+                    "Type",
+                    "Data",
                 };
             }
         }
 
-        public ToolStripItem[] customContextMenuStripButtons
+        public Reference[] defaultReference
         {
             get
             {
-                return new ToolStripItem[0];
+                string path = Path.GetTempFileName();
+                File.WriteAllBytes(path, BitConverter.GetBytes(8).Reverse().ToArray());
+                Reference length =  new Reference("8", path, 0, 4, Reference.LengthType.invariable, true);
+
+                path = Path.GetTempFileName();
+                File.WriteAllText(path, "free");
+                Reference type = new Reference("free", path, 0, 4, Reference.LengthType.invariable, true);
+
+                path = Path.GetTempFileName();
+                Reference data = new Reference("<0> bytes long", path, 0, 4, Reference.LengthType.variable, false);
+
+                return new Reference[]
+                {
+                    length,
+                    type,
+                    data
+                };                
             }
         }
 
-        public ToolStripItem[] customMenuStripOptions
+        public Option[] customOptions
         {
             get
             {
-                return new ToolStripItem[0];
+                return new Option[0];
             }
         }
 
@@ -95,45 +95,12 @@ namespace ISOBaseMediaFormat
             }
         }
 
-        private class chunk
-        {
-            /// <summary>
-            /// The length of the entire chunk
-            /// </summary>
-            public int length { get; set; }
-            /// <summary>
-            /// The chunk's type
-            /// </summary>
-            public byte[] type { get; set; }
-            /// <summary>
-            /// The chunk's data
-            /// </summary>
-            public byte[] data { get; set; }
-
-
-            public chunk()
-            {
-                length = 0;
-                //type = Encoding.ASCII.GetBytes("IEND");
-                type = new byte[] { 0x49, 0x45, 0x4e, 0x44 };
-                data = new byte[0];
-            }
-            public chunk(int length, byte[] type, byte[] data)
-            {
-                this.length = length;
-                this.type = type;
-                this.data = data;
-            }
-        }
-
-        private List<chunk> openedData { get; set; }
-
         #region Header/Save Filters
 
         //TODO make this better... somehow...
         #region Dictionary version
 
-        private static Dictionary<string, Tuple<string, string>> ftyps = new Dictionary<string, Tuple<string, string>>()
+        private static readonly Dictionary<string, Tuple<string, string>> ftyps = new Dictionary<string, Tuple<string, string>>()
         {
             { "3g2a", new Tuple<string,string>("3GPP2 Media compliant with 3GPP2 C.S0050-0 V1.0", "*.3g2") },
 			{ "3g2b", new Tuple<string,string>("3GPP2 Media compliant with 3GPP2 C.S0050-A V1.0.0", "*.3g2") },
@@ -338,395 +305,189 @@ namespace ISOBaseMediaFormat
             {
                 get
                 {
-                Dictionary<string, string> output = new Dictionary<string, string>
-                {
-                    { _3GPRegex, _3GPSaveFilter },
-                    { _3G2Regex, _3G2SaveFilter },
-                    { QTRegex, QTSaveFilter },
-                    { MP4Regex, MP4SaveFilter }
-                };
-                return output;
+                    Dictionary<string, string> output = new Dictionary<string, string>
+                    {
+                        { _3GPRegex, _3GPSaveFilter },
+                        { _3G2Regex, _3G2SaveFilter },
+                        { QTRegex, QTSaveFilter },
+                        { MP4Regex, MP4SaveFilter }
+                    };
+                    return output;
                 }
             }
 
-        public string filter
+        public string ofdFilter
         {
             get
             {
-                return "ISO base media file format (*.3gp;*.3gpp;*.3g2;*.mj2;*.mjp2;*.mov;*.mp4;*.m4a;*.m4p;*.m4b;*.m4r;*.m4v)|*.3gp;*.3gpp;*.3g2;*.mj2;*.mjp2;*.mov;*.mp4;*.m4a;*.m4p;*.m4b;*.m4r;*.m4v";
+                string filetypes = string.Join(";", ftyps.Values.Select(x => x.Item2).Where(x => x != null).Distinct().ToArray());
+                return $"ISO base media file format ({filetypes})|{filetypes}";
             }
         }
-
-        public DataGridViewCell[] selectedCells { get; set; }
-
-        public DataGridViewRow[] GetRows()
-        {
-            List<DataGridViewRow> rows = new List<DataGridViewRow>();
-            for (int i = 0; i < openedData.Count; i++)
-            {
-                DataGridViewRow row = new DataGridViewRow();
-                row.Cells.AddRange(new DataGridViewCell[] {
-                    new DataGridViewTextBoxCell
-                    {
-                        Value = openedData[i].length
-                    },
-                    new DataGridViewTextBoxCell
-                    {
-                        Value = Encoding.ASCII.GetString(openedData[i].type)
-                    },
-                    new DataGridViewTextBoxCell
-                    {
-                        Value = $"<{openedData[i].data.Length}> bytes long"
-                    }
-                });
-                rows.Add(row);
-
-                /*
-                rows.Add(openedFile.data[i].length,
-                             Encoding.ASCII.GetString(openedFile.data[i].type),
-                             $"<{openedFile.data[i].data.Length}> bytes long",
-                             BitConverter.ToString(openedFile.data[i].crc.ToArray()).Replace("-", ", ")
-                             );
-                */
-            }
-            return rows.ToArray();
-        }
-
-
-        public string Load(byte[] selectedBytes)
-        {
-            string fileType = Encoding.ASCII.GetString(selectedBytes.Skip(4).Take(4).ToArray()).ToLower();
-            if(fileType != "moov")
-                fileType = Encoding.ASCII.GetString(selectedBytes.Skip(8).Take(4).ToArray()).ToLower();
-
-            /*
-            string[] returnFilter = saveableFileTypes.Where(x => Regex.IsMatch(fileType, x.Key,RegexOptions.IgnoreCase)).Select(x => x.Value).ToArray();
-
-            if (returnFilter == null || returnFilter.Length != 1)
-            {
-                DialogResult warningDR = MessageBox.Show("The selected file's header does not match with any recognized \nWould you like to open the file anyways?", "Warning", MessageBoxButtons.YesNo);
-                if (warningDR != DialogResult.Yes)
-                    return null;
-                else
-                    returnFilter[0] = "";
-            }
-            */
-
-            string returnFilter;
-
-            var ftyp = ftyps.Where(x => x.Key.ToLower() == fileType).Select(x => x.Value).ToArray();
-
-            if(ftyp.Length == 1)
-            {
-                string extention = ftyp[0].Item2 ?? "*.mp4"; 
-                returnFilter = $"{ftyp[0].Item1} ({extention})|{extention}";
-            }
-            else
-            {
-                DialogResult warningDR = MessageBox.Show("The selected file's header does not match with any recognized \nWould you like to open the file anyways?", "Warning", MessageBoxButtons.YesNo);
-                if (warningDR != DialogResult.Yes)
-                    return null;
-                else
-                    returnFilter = "";
-            }
-
-            openedData = new List<chunk>();
-            while (selectedBytes.Length > 0)
-            {
-                int length = BitConverter.ToInt32(selectedBytes.Take(4).Reverse().ToArray(), 0);
-                var workingchunk = new chunk(
-                    length,
-                    selectedBytes.Skip(4).Take(4).ToArray(),
-                    selectedBytes.Skip(8).Take(length - 8).ToArray()
-                    );
-
-                openedData.Add(workingchunk);
-                selectedBytes = selectedBytes.Skip(length).ToArray();
-            }
-            return returnFilter;
-        }
-
-        #region Exporting stuff
-
-        public byte[] ExportAll()
-        {
-            List<byte> output = new List<byte>();
-            for (int i = 0; i < openedData.Count; i++)
-            {
-                output.AddRange(BitConverter.GetBytes(openedData[i].length).Reverse());
-                output.AddRange(openedData[i].type);
-                output.AddRange(openedData[i].data);
-            }
-            return output.ToArray();
-        }
-
-        public byte[] ExportSelectedAsArray(DataGridViewCell[] cells = null)
-        {
-            List<byte> output = new List<byte>();
-            for (int i = 0; i < cells.Length; i++)
-                output.AddRange(GetCellData(cells[i]));
-            return output.ToArray();
-        }
-
-        public List<byte[]> ExportSelectedAsList(DataGridViewCell[] cells = null)
-        {
-            List<byte[]> output = new List<byte[]>();
-            for (int i = 0; i < cells.Length; i++)
-                output.Add(GetCellData(cells[i]));
-            return output;
-        }
-
-        private byte[] GetCellData(DataGridViewCell cell)
-        {
-            switch (cell.ColumnIndex)
-            {
-                case (0):
-                    return BitConverter.GetBytes(openedData[cell.RowIndex].length).ToArray();
-                case (1):
-                    return openedData[cell.RowIndex].type;
-                case (2):
-                    return openedData[cell.RowIndex].data;
-                default:
-                    return null;
-            }
-        }
-
-        #endregion
-
-        public void ReplaceSelectedWith(byte[] replacementBytes, DataGridViewCell[] cells = null)
-        {
-            /*
-            if (cells == null)
-                cells = selectedCells;
-            else
-              cells = cells.OrderBy(c => c.ColumnIndex).OrderBy(c => c.RowIndex).ToArray();
-            */
-            cells = (cells != null) ? cells.OrderBy(c => c.ColumnIndex).OrderBy(r => r.RowIndex).ToArray() : selectedCells;
-
-            #region Valid cell finder
-            int badCells = cells.Where(x => x.RowIndex >= openedData.Count).Count();
-            if (badCells > 0)
-            {
-                //TODO replace all MessageBox.show stuff here (maybe use exceptions?)
-                if (badCells == cells.Length)
-                {
-                    MessageBox.Show("The cells you have selected to replace are not valid for replacing.", "Error");
-                    return;
-                }
-                else
-                {
-                    if (MessageBox.Show($"{badCells} of the cells you've selected for replacing are not valid to repalce. Would you like to continue using all remaining valid cells?", "Warning", MessageBoxButtons.YesNo) != DialogResult.Yes)
-                        return;
-                    else
-                        cells = cells.Where(x => x.RowIndex < openedData.Count).ToArray();
-                }
-            }
-            #endregion
-
-            #region Length of replacement finder
-
-            long lengthOfReplacementBytes = replacementBytes.Length;
-
-            long lengthOfcells = 0;
-
-            for (int i = 0; i < cells.Length; i++)
-            {
-                switch (cells[i].ColumnIndex)
-                {
-                    case (0):
-                        lengthOfcells += BitConverter.GetBytes(openedData[cells[i].RowIndex].length).Length;
-                        break;
-                    case (1):
-                        lengthOfcells += openedData[cells[i].RowIndex].type.Length;
-                        break;
-                    case (2):
-                        lengthOfcells += openedData[cells[i].RowIndex].data.Length;
-                        break;
-                }
-            }
-            #endregion
-
-            #region Proportional cell replacer (only for data chunks)
-            if (cells.All(x => x.ColumnIndex == 2))
-            {
-                for (int i = 0; i < cells.Length; i++)
-                {
-                    /* Explanation of that one line down below
-                    
-                    decimal percent = decimal.Divide(data[cells[i].RowIndex].data.Length, lengthOfcells);
-                                        
-                    decimal amount = percent * lengthOfReplacementBytes;
-
-                    //TODO maybe use AwayFromZero?
-                    //TODO add support for when chunk length exceeds int max size
-                    int amountToTake = (int)Math.Round(amount);
-
-                    data[cells[i].RowIndex].data = replacementBytes.Take(amountToTake).ToArray();
-
-                    */
-                    openedData[cells[i].RowIndex].data = replacementBytes.Take((int)Math.Round(decimal.Divide(openedData[cells[i].RowIndex].data.Length, lengthOfcells) * lengthOfReplacementBytes)).ToArray();
-
-                    openedData[cells[i].RowIndex].length = openedData[cells[i].RowIndex].data.Length + 8; //TODO
-
-                    cells[i].Value = $"<{openedData[cells[i].RowIndex].data.Length}> bytes long";
-                    replacementBytes = replacementBytes.Skip(openedData[cells[i].RowIndex].data.Length).ToArray();
-                }
-            }
-            #endregion
-            #region Non-proportional cell replacer (for mixed cell types)
-            else
-            {
-                if (replacementBytes.Length != lengthOfcells)
-                {
-                    //DialogResult warningDR = MessageBox.Show("The file you have selected is not the same length as the chunk sections you wish to replace. Are you sure you want to continue?", "Warning", MessageBoxButtons.YesNo);
-                    if (MessageBox.Show("The file you have selected is not the same length as the chunk sections you wish to replace. Are you sure you want to continue?", "Warning", MessageBoxButtons.YesNo) == DialogResult.No)
-                    {
-                        MessageBox.Show("Ok.", "Oh.");
-                        return;
-                    }
-                    else
-                    {
-                        MessageBox.Show("STAP");
-                        return;
-                    }
-                }
-
-                for (int i = 0; i < cells.Length; i++)
-                {
-                    switch (cells[i].ColumnIndex)
-                    {
-                        case (0):
-                            openedData[cells[i].RowIndex].length = BitConverter.ToInt32(replacementBytes.Take(4).Reverse().ToArray(), 0);
-                            cells[i].Value = openedData[cells[i].RowIndex].length;
-                            replacementBytes = replacementBytes.Skip(4).ToArray();
-                            break;
-                        case (1):
-                            openedData[cells[i].RowIndex].type = replacementBytes.Take(4).ToArray();
-                            cells[i].Value = Encoding.ASCII.GetString(openedData[cells[i].RowIndex].type);
-                            replacementBytes = replacementBytes.Skip(4).ToArray();
-                            break;
-                        case (2):
-                            openedData[cells[i].RowIndex].data = replacementBytes.Take(openedData[cells[i].RowIndex].data.Length).ToArray();
-                            cells[i].Value = $"<{openedData[cells[i].RowIndex].data.Length}> bytes long";
-                            replacementBytes = replacementBytes.Skip(openedData[cells[i].RowIndex].data.Length).ToArray();
-                            break;
-                    }
-                }
-            }
-            #endregion
-        }
-
-        public void CellEndEdit(DataGridViewCell editedCell)
-        {
-            //If the edited cell's value is not null, set the chunk's data to be equal to it
-            if (editedCell.Value != null && editedCell.Value.ToString() != null) //TODO might not need the ToString variant...
-            {
-                switch (editedCell.ColumnIndex)
-                {
-                    case (0):
-                        //Set the chunk length
-                        openedData[editedCell.RowIndex].length = int.Parse(editedCell.Value.ToString());
-                        break;
-                    case (1):
-                        //Set the chunk type
-                        openedData[editedCell.RowIndex].type = Encoding.ASCII.GetBytes(editedCell.Value.ToString());
-                        break;
-                    case (2):
-                        //Edit machine broke
-                        MessageBox.Show("What?! How?! (Please contact /u/Brayconn.)");
-                        break;
-                }
-            }
-        }
-
-
-        public void CellFormating(DataGridViewCellFormattingEventArgs e)
-        {
-            if (e.RowIndex < openedData.Count)
-            {
-                switch (e.ColumnIndex)
-                {
-                    case (0):
-                        e.Value = openedData[e.RowIndex].length;
-                        if (openedData[e.RowIndex].length != BitConverter.GetBytes(openedData[e.RowIndex].length).Length + openedData[e.RowIndex].type.Length + openedData[e.RowIndex].data.Length)
-                            e.CellStyle.BackColor = Color.Red;
-                        else
-                            e.CellStyle.BackColor = Color.White;
-                        break;
-                    case (1):
-                        e.Value = Encoding.ASCII.GetString(openedData[e.RowIndex].type);
-                        if (!validChunkTypes.Any(x => x.SequenceEqual(openedData[e.RowIndex].type)))
-                            e.CellStyle.BackColor = Color.Red;
-                        else
-                            e.CellStyle.BackColor = Color.White;
-                        break;
-                    case (2):
-                        e.Value = $"<{openedData[e.RowIndex].data.Length}> bytes long";
-                        if (openedData[e.RowIndex].length != BitConverter.GetBytes(openedData[e.RowIndex].length).Length + openedData[e.RowIndex].type.Length + openedData[e.RowIndex].data.Length)
-                            e.CellStyle.BackColor = Color.Red;
-                        else
-                            e.CellStyle.BackColor = Color.White;
-                        break;
-                }
-            }
-        }
-
-
-
-        public TreeNode GetHotfileInfo(DataGridViewCell cell)
-        {
-            string nodeName = "Chunk " + (cell.RowIndex + 1);
-            switch (cell.ColumnIndex)
-            {
-                case (0):
-                    nodeName += " Length";
-                    break;
-                case (1):
-                    nodeName += " Type";
-                    break;
-                case (2):
-                    nodeName += " Data";
-                    break;
-            }
-            return new TreeNode(nodeName);
-        }
-        public TreeNode[] GetHotfileInfo(DataGridViewCell[] cells)
-        {
-            TreeNode[] nodes = new TreeNode[cells.Length];
-            for (int i = 0; i < cells.Length; i++)
-                nodes[i] = GetHotfileInfo(cells[i]);
-            return nodes;
-        }
-
-
-        public void MoveChunk(int rowIndexFromMouseDown, int rowIndexOfItemUnderMouseToDrop)
-        {
-            var chunktoMove = openedData[rowIndexFromMouseDown];
-            openedData.RemoveAt(rowIndexFromMouseDown);
-            openedData.Insert(rowIndexOfItemUnderMouseToDrop, chunktoMove);
-        }
-
+        public string sfdFilter { get; set; }
         
-
-        public void UpdateRows(DataGridViewRow[] rows)
+        public bool IsFileValid(FileStream stream)
         {
-            throw new NotImplementedException();
+            using (BinaryReader br = new BinaryReader(stream,Encoding.Default,true))
+            {
+                stream.Seek(4, SeekOrigin.Begin);
+                string fileType = new string(br.ReadChars(4));
+                if (fileType != "moov")
+                    fileType = new string(br.ReadChars(4));
+
+                var ftyp = ftyps.Where(x => x.Key.ToLower() == fileType).Select(x => x.Value).ToArray();
+
+                if (ftyp.Length == 1)
+                {
+                    string extention = ftyp[0].Item2 ?? "*.mp4";
+                    sfdFilter = $"{ftyp[0].Item1} ({extention})|{extention}";
+                    return true;
+                }
+                else
+                {
+                    AskToContinueEventArgs eventArgs = new AskToContinueEventArgs("The selected file's header does not match with any recognized ISO Base Media Format or Apple Quicktime headers.", "File Validity Checker");
+                    AskToContinue(this, eventArgs);
+                    return eventArgs.result;
+                }
+            }
         }
 
-        public void UpdateRows(DataGridViewRow row)
+        public void UpdateReferenceValidity(Reference[] references, string defaultFile)
         {
-            throw new NotImplementedException();
+            if(references[0].validity == Reference.ReferenceValidity.unknown || references[2].validity == Reference.ReferenceValidity.unknown)
+            {
+                /* TODO new code doesn't trigger Microsoft's Managed Recommended rules, but I'm not really sure what advantage that gives...
+                using (FileStream fsr = new FileStream(references[0].file, FileMode.Open, FileAccess.Read))
+                using (BinaryReader br = new BinaryReader(fsr))
+                {
+                    fsr.Seek(references[0].offset,SeekOrigin.Begin);
+                    if ( BitConverter.ToInt32(br.ReadBytes(references[0].length).Reverse().ToArray(),0) - 8 != references[2].length)
+                    {
+                        references[0].validity = Reference.ReferenceValidity.invalid;
+                        references[2].validity = Reference.ReferenceValidity.invalid;
+                    }
+                    else
+                    {
+                        references[0].validity = Reference.ReferenceValidity.valid;
+                        references[2].validity = Reference.ReferenceValidity.valid;
+                    }
+                }
+                */
+
+                using (BinaryReader br = new BinaryReader(new FileStream(references[0].file, FileMode.Open, FileAccess.Read)))
+                {
+                    br.BaseStream.Seek(references[0].offset, SeekOrigin.Begin);
+                    if (BitConverter.ToInt32(br.ReadBytes(references[0].length).Reverse().ToArray(), 0) - 8 != references[2].length)
+                    {
+                        references[0].validity = Reference.ReferenceValidity.invalid;
+                        references[2].validity = Reference.ReferenceValidity.invalid;
+                    }
+                    else
+                    {
+                        references[0].validity = Reference.ReferenceValidity.valid;
+                        references[2].validity = Reference.ReferenceValidity.valid;
+                    }
+                }
+
+            }
+            if(references[1].validity == Reference.ReferenceValidity.unknown)
+            {
+                /*
+                using (FileStream fsr = new FileStream(references[1].file, FileMode.Open, FileAccess.Read))
+                using (BinaryReader br = new BinaryReader(fsr))
+                {
+                    fsr.Seek(references[1].offset,SeekOrigin.Begin);
+                    byte[] type = br.ReadBytes(references[1].length);
+                    if (validChunkTypes.Any(x => x.SequenceEqual(type)))
+                        references[1].validity = Reference.ReferenceValidity.valid;
+                    else
+                        references[1].validity = Reference.ReferenceValidity.invalid;
+                }
+                */
+
+                using (BinaryReader br = new BinaryReader(new FileStream(references[1].file, FileMode.Open, FileAccess.Read)))
+                {
+                    br.BaseStream.Seek(references[1].offset, SeekOrigin.Begin);
+                    byte[] type = br.ReadBytes(references[1].length);
+                    /*
+                    if (validChunkTypes.Any(x => x.SequenceEqual(type)))
+                        references[1].validity = Reference.ReferenceValidity.valid;
+                    else
+                        references[1].validity = Reference.ReferenceValidity.invalid;
+                        */
+                    references[1].validity = (validChunkTypes.Any(x => x.SequenceEqual(type))) ? Reference.ReferenceValidity.valid : Reference.ReferenceValidity.invalid;
+                }
+
+            }
         }
 
-
-        public void UserAddedRow(DataGridViewRowEventArgs e)
+        public Tuple<Reference,List<Reference[]>> Load(FileStream stream)
         {
-            openedData.Add(new chunk());
+            using (BinaryReader br = new BinaryReader(stream))
+            {
+                stream.Seek(0, SeekOrigin.Begin);
+                var output = new List<Reference[]>();
+                long streamPosition = 0;
+                while (streamPosition < stream.Length)
+                {
+                    long lengthO = stream.Position;
+                    int dataL = BitConverter.ToInt32(br.ReadBytes(4).Reverse().ToArray(), 0) - 8;
+                    long typeO = stream.Position; //TODO implement some sort of checking system here
+                    string typeS = new string(br.ReadChars(4));
+                    long dataO = stream.Position;
+                    streamPosition = stream.Seek(dataL, SeekOrigin.Current);
+
+                    Reference[] referencesToAdd = new Reference[]
+                    {
+                        new Reference((dataL + 8).ToString(),stream.Name,lengthO,4,Reference.LengthType.invariable,true),
+                        new Reference(typeS,stream.Name,typeO,4,Reference.LengthType.invariable,true),
+                        new Reference($"<{dataL}> bytes long",stream.Name,dataO,dataL,Reference.LengthType.variable,false),
+                    };
+                    UpdateReferenceValidity(referencesToAdd,stream.Name);
+                    output.Add(referencesToAdd);
+                }
+                return new Tuple<Reference, List<Reference[]>>(null,output);
+            };
         }
 
-        public void UserDeletingRow(DataGridViewRowCancelEventArgs e)
+        public byte[] FormatReplacementInput(int column, object input)
         {
-            openedData.RemoveAt(e.Row.Index);
+            switch (column)
+            {
+                case (0):
+                    int output;
+                    return (int.TryParse(input.ToString(), out output)) ? BitConverter.GetBytes(output).Reverse().ToArray() : null;
+                case (1):
+                    return (input.ToString().Length == 4) ? Encoding.ASCII.GetBytes(input.ToString()) : null;
+                case (2):
+                    return null; //You can't edit the data directly
+            }
+            return null;
         }
+
+        public string GetHotfileInfo(Tuple<int,int> reference)
+        {
+            string name = "Chunk " + (reference.Item1 + 1);
+            switch (reference.Item2)
+            {
+                case (0):
+                    name += " Length";
+                    break;
+                case (1):
+                    name += " Type";
+                    break;
+                case (2):
+                    name += " Data";
+                    break;
+            }
+            return name;
+        }
+        public string[] GetHotfileInfo(Tuple<int,int>[] references)
+        {
+            string[] names = new string[references.Length];
+            for (int i = 0; i < references.Length; i++)
+                names[i] = GetHotfileInfo(references[i]);
+            return names;
+        }       
     }
 }

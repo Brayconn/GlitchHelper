@@ -32,16 +32,12 @@ namespace GlitchHelper
             InitializeComponent();
         }
 
-        //HACK...maybe?
+        //UNSURE
         private delegate void HotfileChangedDelegate(object sender, DataHandler.HotfileModifiedEventArgs e);
         private void HotfileChanged(object sender, DataHandler.HotfileModifiedEventArgs e)
         {
             if (treeView1.InvokeRequired)
             {
-                /*
-                HotfileChangedDelegate hc = new HotfileChangedDelegate(HotfileChanged);
-                this.Invoke(hc, new object[] { sender, e });
-                */
                 Invoke(new HotfileChangedDelegate(HotfileChanged), new object[] { sender, e });
             }
             else
@@ -52,7 +48,8 @@ namespace GlitchHelper
                     treeView1.Nodes.Add(e.name, e.name);
 
                 treeView1.Nodes[e.name].Nodes.Clear();
-                treeView1.Nodes[e.name].Nodes.AddRange(dataHandler.plugins.ElementAt(dataHandler.selectedPlugin).GetHotfileInfo(e.contents));
+                for(int i = 0; i< e.contentNames.Length; i++)
+                    treeView1.Nodes[e.name].Nodes.Add(e.contentNames[i],e.contentNames[i]);
             }
         }
 
